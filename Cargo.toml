@@ -3,29 +3,32 @@ name = "ppaaeedb"
 version = "0.1.0"
 edition = "2021"
 
+# Core Dependencies
 [dependencies]
-dotenv = "0.15.0"
-sysinfo = "0.29"
+dotenv = "0.15.0"  # Environment variable loader
+sysinfo = "0.30.5"  # System information (latest stable compatible with serenity)
 
 # Logging
-env_logger = "0.11.0"
-log = "0.4.20"
+env_logger = "0.11.3"  # Environment-aware logging
+log = "0.4.21"  # Logging facade
 
-reqwest = { version = "0.11", features = ["socks", "rustls-tls"] }  
-tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
+# Async/Networking
+reqwest = { version = "0.12.4", features = ["socks", "rustls-tls"] }  # HTTP client (latest with rustls)
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }  # Async runtime
 
+# Discord API Wrapper
 [dependencies.serenity]
+version = "0.12.5"  # Latest stable
 default-features = false
 features = [
-    "builder",
-    "chrono",
-    "client",
-    "framework",
-    "gateway",
-    "http",
-    "model",
-    "standard_framework",
-    "utils",
-    "rustls_backend",
+    "builder",         # Command builder utilities
+    "chrono",          # DateTime support
+    "client",          # Discord client core
+    "framework",       # Command framework
+    "gateway",         # Websocket connection
+    "http",            # REST API support
+    "model",           # Discord data models
+    "standard_framework", # Default command framework
+    "utils",           # Helper utilities
+    "rustls_backend",  # TLS via rustls (recommended over native-tls)
 ]
-version = "0.12"

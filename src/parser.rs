@@ -110,7 +110,7 @@ impl Tokenizer {
 
         while let Some(&current_char) = chars_iter.peek() {
             // Number literal parsing, including leading '.' if followed by digit
-            if current_char.is_ascii_digit() || (current_char == '.' && chars_iter.clone().nth(1).map_or(false, |ch| ch.is_ascii_digit())) {
+            if current_char.is_ascii_digit() || (current_char == '.' && chars_iter.clone().nth(1).is_some_and(|ch| ch.is_ascii_digit())) {
                 let mut literal_text = String::new();
 
                 // Handle leading '0' for hex/binary as before
@@ -123,7 +123,7 @@ impl Tokenizer {
                                 literal_text.push(next_char);
                                 chars_iter.next();
                                 while let Some(&hex_digit) = chars_iter.peek() {
-                                    if hex_digit.is_digit(16) {
+                                    if hex_digit.is_ascii_hexdigit() {
                                         literal_text.push(hex_digit);
                                         chars_iter.next();
                                     } else {
@@ -294,7 +294,7 @@ impl Expression {
             .map(Self::parse_single)
             .collect();
 
-        return expressions;
+        expressions
     }
 
     /// Identify if this is an assignment operation.
@@ -509,13 +509,11 @@ fn parse_expression(tokenizer: &mut Tokenizer, min_bp: f32) -> Result<Expression
             let mut operands = vec![first_operand];
 
             // Special case for √ operator that may accept a second operand (e.g., a √ b)
-            if prefix_op == '√' {
-                if matches!(
-                    tokenizer.peek_token(),
-                    Token::Literal(_) | Token::Operator('(') | Token::Operator('√')
-                ) {
-                    operands.push(parse_expression(tokenizer, binding_power)?);
-                }
+            if prefix_op == '√' && matches!(
+                tokenizer.peek_token(),
+                Token::Literal(_) | Token::Operator('(') | Token::Operator('√')
+            ) {
+                operands.push(parse_expression(tokenizer, binding_power)?);
             }
 
             Expression::Operation(prefix_op, operands)
