@@ -1,0 +1,31 @@
+[package]
+name = "ppaaeedb"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dotenv = "0.15.0"
+sysinfo = "0.29"
+
+# Logging
+env_logger = "0.11.0"
+log = "0.4.20"
+
+reqwest = { version = "0.11", features = ["socks", "rustls-tls"] }  
+tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
+
+[dependencies.serenity]
+default-features = false
+features = [
+    "builder",
+    "chrono",
+    "client",
+    "framework",
+    "gateway",
+    "http",
+    "model",
+    "standard_framework",
+    "utils",
+    "rustls_backend",
+]
+version = "0.12"
