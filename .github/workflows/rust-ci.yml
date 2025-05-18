@@ -8,41 +8,60 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_VERSION: stable
+  CARGO_HOME: ~/.cargo
+  CARGO_TARGET_DIR: target
 
 jobs:
-  build:
-    name: Build
+  ci:
+    name: Rust CI
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        # Test multiple toolchain versions if needed
+        rust: [stable, nightly]
+        exclude:
+          - rust: nightly  # Exclude nightly from required checks
+    
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
+    - name: Install Rust (${{ matrix.rust }})
+      uses: dtolnay/rust-toolchain@master  # More maintained alternative
       with:
-        toolchain: stable
-        profile: minimal
-        override: true
+        toolchain: ${{ matrix.rust }}
+        components: rustfmt, clippy  # Include essential components
 
-    - name: Cache cargo dependencies
+    - name: Cache dependencies
       uses: actions/cache@v3
       with:
         path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target/debug/deps
+          ${{ env.CARGO_HOME }}/registry
+          ${{ env.CARGO_HOME }}/git
+          ${{ env.CARGO_TARGET_DIR }}
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
 
-    - name: Build in release mode
-      run: cargo build --release --verbose
+    - name: Build (all features)
+      run: cargo build --all-features --verbose
 
-    - name: Run cargo test
-      run: cargo test --verbose
+    - name: Run tests
+      run: cargo test --all-features --verbose
 
-    - name: Upload release artifacts
-      uses: actions/upload-artifact@v3
+    - name: Lint with Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+
+    - name: Upload build artifacts
+      if: matrix.rust == 'stable' && github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v4
       with:
         name: release-binaries
         path: |
-          target/release/
+          ${{ env.CARGO_TARGET_DIR }}/release/
+        retention-days: 7
         if-no-files-found: error
