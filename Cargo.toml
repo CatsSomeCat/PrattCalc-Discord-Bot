@@ -18,7 +18,7 @@ tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }  # Asyn
 
 # Discord API Wrapper
 [dependencies.serenity]
-version = "0.12.5"  # Latest stable
+version = "0.12.4"  # Latest stable
 default-features = false
 features = [
     "builder",         # Command builder utilities
