@@ -30,8 +30,12 @@ use log::{info, error, warn, debug};
 // Environment configuration
 use dotenv::dotenv;
 
+// Only compile during tests
+#[cfg(test)] 
+mod tests;
+
 // Local modules
-mod parser; mod tests;
+mod parser;
 
 // Re-exports from local modules
 #[allow(unused_imports)]

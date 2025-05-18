@@ -1,6 +1,5 @@
 #[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
+mod parsing_tests {
     use crate::Expression;
 
     /// Parses a single numeric atom.
@@ -10,6 +9,27 @@ mod tests {
         assert_eq!(exprs[0].to_string(), "1");
         Ok(())
     }
+
+    /// Redundant parentheses don't affect structure.
+    #[test]
+    fn parses_nested_parentheses() -> Result<(), Box<dyn std::error::Error>> {
+        let exprs = Expression::parse_from_str("(((a)))")?;
+        assert_eq!(exprs[0].to_string(), "a");
+        Ok(())
+    }
+
+    /// Dot operator: nested access.
+    #[test]
+    fn parses_chained_dot_operator() -> Result<(), Box<dyn std::error::Error>> {
+        let exprs = Expression::parse_from_str("a.b.c.d")?;
+        assert_eq!(exprs[0].to_string(), "(. (. (. a b) c) d)");
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod operator_precedence_tests {
+    use crate::Expression;
 
     /// Operator precedence: addition and multiplication.
     #[test]
@@ -35,27 +55,11 @@ mod tests {
         Ok(())
     }
 
-    /// Complex mixed operations.
-    #[test]
-    fn parses_complex_expression() -> Result<(), Box<dyn std::error::Error>> {
-        let exprs = Expression::parse_from_str("2 + b * 5 - 3 / 5 + 5 - 3")?;
-        assert_eq!(exprs[0].to_string(), "(- (+ (- (+ 2 (* b 5)) (/ 3 5)) 5) 3)");
-        Ok(())
-    }
-
     /// Parentheses change precedence.
     #[test]
     fn parses_parenthesized_expression() -> Result<(), Box<dyn std::error::Error>> {
         let exprs = Expression::parse_from_str("(2 + b) * 5")?;
         assert_eq!(exprs[0].to_string(), "(* (+ 2 b) 5)");
-        Ok(())
-    }
-
-    /// Redundant parentheses don't affect structure.
-    #[test]
-    fn parses_nested_parentheses() -> Result<(), Box<dyn std::error::Error>> {
-        let exprs = Expression::parse_from_str("(((a)))")?;
-        assert_eq!(exprs[0].to_string(), "a");
         Ok(())
     }
 
@@ -66,12 +70,25 @@ mod tests {
         assert_eq!(exprs[0].to_string(), "(+ a (/ (* (* b 2) (+ c a)) 4))");
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod special_operator_tests {
+    use crate::Expression;
 
     /// Power operator has higher precedence.
     #[test]
     fn parses_expression_with_power() -> Result<(), Box<dyn std::error::Error>> {
         let exprs = Expression::parse_from_str("a + b * c ^ 4")?;
         assert_eq!(exprs[0].to_string(), "(+ a (* b (^ c 4)))");
+        Ok(())
+    }
+
+    /// Power is right-associative.
+    #[test]
+    fn parses_nested_power_right_associative() -> Result<(), Box<dyn std::error::Error>> {
+        let exprs = Expression::parse_from_str("a ^ b ^ 2")?;
+        assert_eq!(exprs[0].to_string(), "(^ a (^ b 2))");
         Ok(())
     }
 
@@ -91,19 +108,24 @@ mod tests {
         Ok(())
     }
 
-    /// Power is right-associative.
+    /// Edge case: redundant root.
     #[test]
-    fn parses_nested_power_right_associative() -> Result<(), Box<dyn std::error::Error>> {
-        let exprs = Expression::parse_from_str("a ^ b ^ 2")?;
-        assert_eq!(exprs[0].to_string(), "(^ a (^ b 2))");
+    fn parses_nested_roots() -> Result<(), Box<dyn std::error::Error>> {
+        let exprs = Expression::parse_from_str("√ 2 √ 9")?;
+        assert_eq!(exprs[0].to_string(), "(√ 2 (√ 9))");
         Ok(())
     }
+}
 
-    /// Dot operator: nested access.
+#[cfg(test)]
+mod edge_case_tests {
+    use crate::Expression;
+
+    /// Complex mixed operations.
     #[test]
-    fn parses_chained_dot_operator() -> Result<(), Box<dyn std::error::Error>> {
-        let exprs = Expression::parse_from_str("a.b.c.d")?;
-        assert_eq!(exprs[0].to_string(), "(. (. (. a b) c) d)");
+    fn parses_complex_expression() -> Result<(), Box<dyn std::error::Error>> {
+        let exprs = Expression::parse_from_str("2 + b * 5 - 3 / 5 + 5 - 3")?;
+        assert_eq!(exprs[0].to_string(), "(- (+ (- (+ 2 (* b 5)) (/ 3 5)) 5) 3)");
         Ok(())
     }
 
@@ -122,20 +144,18 @@ mod tests {
         assert_eq!(exprs[0].to_string(), "(^ (. a b) (. 2 c))");
         Ok(())
     }
+}
 
-    /// Edge case: redundant root.
-    #[test]
-    fn parses_nested_roots() -> Result<(), Box<dyn std::error::Error>> {
-        let exprs = Expression::parse_from_str("√ 2 √ 9")?;
-        assert_eq!(exprs[0].to_string(), "(√ 2 (√ 9))");
-        Ok(())
-    }
+#[cfg(test)]
+mod evaluation_tests {
+    use std::collections::HashMap;
+    use crate::Expression;
 
     /// Evaluation of right-associative power.
     #[test]
     fn evaluates_nested_power_expression() -> Result<(), Box<dyn std::error::Error>> {
         let mut context = HashMap::new();
-        let result = Expression::evaluate_sequence("2 ^ 3 ^ 2", &mut context)?; // 2^(3^2) = 512
+        let result = Expression::evaluate_sequence("2 ^ 3 ^ 2", &mut context)?;
         assert_eq!(result, 512.0);
         Ok(())
     }
@@ -144,7 +164,7 @@ mod tests {
     #[test]
     fn evaluates_root_expression() -> Result<(), Box<dyn std::error::Error>> {
         let mut context = HashMap::new();
-        let result = Expression::evaluate_sequence("2 √ 9", &mut context)?; // √(9) base 2 = 3
+        let result = Expression::evaluate_sequence("2 √ 9", &mut context)?;
         assert_eq!(result, 3.0);
         Ok(())
     }
