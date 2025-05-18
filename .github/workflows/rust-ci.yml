@@ -38,3 +38,11 @@ jobs:
 
     - name: Run cargo test
       run: cargo test --verbose
+
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-binaries
+        path: |
+          target/release/
+        if-no-files-found: error

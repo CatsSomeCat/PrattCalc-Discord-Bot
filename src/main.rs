@@ -31,7 +31,7 @@ use log::{info, error, warn, debug};
 use dotenv::dotenv;
 
 // Local modules
-mod parser;
+mod parser; mod tests;
 
 // Re-exports from local modules
 #[allow(unused_imports)]
@@ -342,14 +342,14 @@ async fn handle_status(
 
     // Format system information
     let embed = CreateEmbed::new()
-        .title("🖥️ System Status")
+        .title("System Status")
         .colour(Colour::DARK_GREEN)
-        .field("🏓 Bot Latency", format!("`{}ms`", latency.as_millis()), true)
-        .field("⏱️ Uptime", format_uptime(system.uptime()), true)
-        .field("💾 Memory", format_memory(&system), false)
-        .field("⚡ CPU", format_cpu(&system), false)
-        .field("📊 Processes", format!("`{}` running", system.processes().len()), true)
-        .field("🌡️ Temperature", format_temperature(&system), true);
+        .field("Bot Latency", format!("`{}ms`", latency.as_millis()), true)
+        .field("Uptime", format_uptime(system.uptime()), true)
+        .field("Memory", format_memory(&system), false)
+        .field("CPU", format_cpu(&system), false)
+        .field("Processes", format!("`{}` running", system.processes().len()), true)
+        .field("Temperature", format_temperature(&system), true);
 
     let response = CreateInteractionResponse::Message(
         CreateInteractionResponseMessage::new().embed(embed)
