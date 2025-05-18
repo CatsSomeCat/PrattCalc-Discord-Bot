@@ -50,11 +50,11 @@ jobs:
     - name: Run tests
       run: cargo test --all-features --verbose
 
-    - name: Lint with Clippy (src only)
+    # Checks both lib and bins if they exist
+    - name: Lint with Clippy
       run: |
         cargo clippy --package ppaaeedb \
-          --lib \
-          --bins \
+          --all-targets \
           --all-features \
           -- -D warnings
 
