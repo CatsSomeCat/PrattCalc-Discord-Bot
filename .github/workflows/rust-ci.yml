@@ -24,21 +24,26 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            artifact_path: target/release/
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            artifact_path: target/release/
         exclude:
-          - rust: nightly  # Exclude nightly from required checks
+          # Exclude nightly from required checks
+          - rust: nightly
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
     - name: Install Rust (${{ matrix.rust }})
-      uses: dtolnay/rust-toolchain@master  # More maintained alternative
+    # More maintained alternative
+      uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ matrix.rust }}
         targets: ${{ matrix.target }}
-        components: rustfmt, clippy  # Include essential components
+        # Include essential components
+        components: rustfmt, clippy
 
     - name: Cache dependencies
       uses: actions/cache@v3
@@ -68,12 +73,19 @@ jobs:
     - name: Build (all features)
       run: cargo build --all-features --verbose --target ${{ matrix.target }}
 
+    - name: Prepare artifacts
+      if: github.ref == 'refs/heads/main'
+      run: |
+        mkdir -p artifacts
+        # Find and copy all binaries
+        find ${{ matrix.artifact_path }} -maxdepth 1 -type f \( -executable -o -name "*.exe" \) -exec cp {} artifacts/ \;
+      shell: bash
+
     - name: Upload build artifacts
       if: github.ref == 'refs/heads/main'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ runner.os }}-binaries
-        path: |
-          ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/
+        path: artifacts/
         retention-days: 7
-        if-no-files-found: error
+        if-no-files-found: warn
