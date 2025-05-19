@@ -73,12 +73,45 @@ jobs:
     - name: Build (all features)
       run: cargo build --all-features --verbose --target ${{ matrix.target }}
 
+    - name: Verify build output
+      run: |
+        echo "Build verification:"
+        cargo metadata --format-version=1 | jq .target_directory
+        find . -name "target" -type d
+        ls -laR target/
+
     - name: Prepare artifacts
       if: github.ref == 'refs/heads/main'
       run: |
+        # Create artifacts directory
         mkdir -p artifacts
-        # Find and copy all binaries
-        find ${{ matrix.artifact_path }} -maxdepth 1 -type f \( -executable -o -name "*.exe" \) -exec cp {} artifacts/ \;
+        
+        # Debug: List build directory structure
+        echo "Current directory: $(pwd)"
+        echo "Build directory contents:"
+        ls -la target/
+        
+        # Check if release directory exists
+        if [ -d "target/release/" ]; then
+          echo "Found release binaries:"
+          find target/release/ -maxdepth 1 -type f \( -executable -o -name "*.exe" \)
+          
+          # Copy binaries with error suppression
+          find target/release/ -maxdepth 1 -type f \( -executable -o -name "*.exe" \) -exec cp -v {} artifacts/ \; || true
+        else
+          echo "Warning: No release directory found at target/release/"
+          echo "Checking alternative locations..."
+          
+          # Fallback to target/<triple>/release/
+          if [ -d "target/${{ matrix.target }}/release/" ]; then
+            echo "Found alternative release directory:"
+            find target/${{ matrix.target }}/release/ -maxdepth 1 -type f \( -executable -o -name "*.exe" \) -exec cp -v {} artifacts/ \; || true
+          fi
+        fi
+        
+        # List collected artifacts
+        echo "Artifacts directory contents:"
+        ls -la artifacts/
       shell: bash
 
     - name: Upload build artifacts
