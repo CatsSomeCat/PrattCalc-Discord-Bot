@@ -18,10 +18,13 @@ use serenity::model::gateway::Ready;
 // System monitoring
 use sysinfo::{
     System, 
+
+    // Traits needed for older versions
     SystemExt, 
     ComponentExt, 
     CpuExt
 };
+// For newer versions (0.26+), some traits might not be needed
 
 // Logging utilities
 #[allow(unused_imports)]
@@ -314,10 +317,10 @@ fn format_memory(system: &System) -> String {
 }
 
 fn format_cpu(system: &System) -> String {
-    let global_cpu = system.global_cpu_info();
-    format!("`{:.1}%` usage ({} cores)", 
-           global_cpu.cpu_usage(),
-           system.cpus().len())
+    // Handle different versions of sysinfo
+    let cpu_usage = system.global_cpu_info().cpu_usage();
+    let cpu_count = system.cpus().len();
+    format!("`{:.1}%` usage ({} cores)", cpu_usage, cpu_count)
 }
 
 fn format_temperature(system: &System) -> String {
@@ -337,9 +340,12 @@ async fn handle_status(
     // Start timing for latency measurement
     let start_time = Instant::now();
 
-    // Get system information
-    let mut system = System::new_all();
-    system.refresh_all();
+    // Get system information - refresh what you need
+    let mut system = System::new();
+    system.refresh_cpu();      // Need this for CPU info
+    system.refresh_memory();   // Need this for memory info
+    system.refresh_components(); // Need this for temperature
+    system.refresh_processes(); // Need this for process count
 
     // Calculate latency
     let latency = start_time.elapsed();
