@@ -1,11 +1,11 @@
 name: Rust CI
 
+# Trigger workflow on push and pull request to 'main' branch
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-
 
 # Global Environment Variables
 env:
@@ -19,11 +19,16 @@ env:
 
 jobs:
   ci:
+    # Job name shown in GitHub UI
     name: Rust CI (${{ matrix.os }} / ${{ matrix.rust }})
+  
+    # Specify the OS to run this job on
     runs-on: ${{ matrix.os }}
+
     strategy:
       matrix:
         include:
+          # Each entry in the matrix defines a combination of OS, Rust version, and build target
           - os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
@@ -46,53 +51,61 @@ jobs:
             artifact_path: target\\release\\
 
     steps:
-      # Checkout repository code
+      # Checkout the source code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up Rust toolchain (stable or nightly)
+      # Install the specified Rust toolchain and components
       - name: Set up Rust (${{ matrix.rust }})
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
+          # Make this toolchain the default
           override: true
+          # Install the required compilation target
           targets: ${{ matrix.target }}
+          # Install rustfmt and clippy
           components: rustfmt, clippy
 
-      # Ensure target triple is installed for all platforms
+      # Ensure that the target triple is installed
       - name: Ensure Rust target is installed
         run: rustup target add ${{ matrix.target }}
-        
-      # Show Rust version info
+
+      # Print versions of rustc and cargo for debugging
       - name: Show Rust version
         run: rustc --version && cargo --version
 
-      # Cache dependencies and builds
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+      # Cache Rust build artifacts and dependencies
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
         with:
-          key: ${{ runner.os }}-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry               # Registry cache
+            ~/.cargo/git                    # Git cache
+            target                          # Build output directory
+          # Cache key based on OS and lockfile hash
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      # Run clippy linter (if enabled and on stable)
+      # Run clippy to catch common mistakes and improve code (only if linting is enabled and toolchain is stable)
       - name: Lint with Clippy
         if: env.RUN_LINT == 'true' && matrix.rust == 'stable'
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-      # Check formatting with rustfmt (if enabled and on stable)
+      # Check code formatting using rustfmt (only if linting is enabled and toolchain is stable)
       - name: Check formatting
         if: env.RUN_LINT == 'true' && matrix.rust == 'stable'
         run: cargo fmt --all -- --check
 
-      # Run tests (if enabled)
+      # Run tests (only if testing is enabled)
       - name: Run tests
         if: env.RUN_TESTS == 'true'
         run: cargo test --all-features --verbose --target ${{ matrix.target }}
 
-      # Build release binaries
+      # Build release binaries for all binaries in the crate
       - name: Build release binaries
         run: cargo build --release --bins --all-features --verbose --target ${{ matrix.target }}
 
-      # Output build directory contents for verification
+      # Output contents of build directory for troubleshooting and verification
       - name: Verify build output
         run: |
           echo "Build verification:"
@@ -100,7 +113,7 @@ jobs:
           echo "Contents of target directory:"
           ls -laR target/
 
-      # Prepare artifact files from build (if enabled)
+      # Copy binaries to a separate artifacts/ directory (only for stable toolchain on main branch)
       - name: Prepare artifacts
         if: github.ref == 'refs/heads/main' && matrix.rust == 'stable' && env.RUN_ARTIFACTS == 'true'
         run: |
@@ -109,8 +122,10 @@ jobs:
           echo "Listing release dir: ${{ matrix.artifact_path }}"
           ls -la "${{ matrix.artifact_path }}"
 
+          # Use cargo metadata and jq to find binary targets
           BINARIES=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[].targets[] | select(.kind[] == "bin") | .name')
 
+          # Copy each binary (with and without .exe for Windows)
           for BIN in $BINARIES; do
             for EXT in "" ".exe"; do
               BIN_PATH="${{ matrix.artifact_path }}${BIN}${EXT}"
@@ -125,11 +140,12 @@ jobs:
           ls -la artifacts/
         shell: bash
 
-      # Upload artifact files (if enabled)
+      # Upload compiled binaries as workflow artifacts for later download
       - name: Upload build artifacts
         if: github.ref == 'refs/heads/main' && matrix.rust == 'stable' && env.RUN_ARTIFACTS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-binaries-${{ github.sha }}
           path: artifacts/
+          # Keep artifacts for 7 days
           retention-days: 7
