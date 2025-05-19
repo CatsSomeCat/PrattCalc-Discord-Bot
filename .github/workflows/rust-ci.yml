@@ -6,11 +6,16 @@ on:
   pull_request:
     branches: [ main ]
 
+
+# Global Environment Variables
 env:
-  CARGO_TERM_COLOR: always
-  RUST_VERSION: stable
-  CARGO_HOME: ~/.cargo
-  CARGO_TARGET_DIR: target
+  CARGO_TERM_COLOR: always     # Always colorize cargo output
+  RUST_VERSION: stable         # Default Rust toolchain version
+  CARGO_HOME: ~/.cargo         # Cargo home directory
+  CARGO_TARGET_DIR: target     # Build output directory
+  RUN_LINT: false              # Set to 'false' to skip clippy and formatting checks
+  RUN_TESTS: false             # Set to 'false' to skip running tests
+  RUN_ARTIFACTS: true          # Build and upload artifacts if true
 
 jobs:
   ci:
@@ -18,7 +23,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Explicit matrix of all valid combinations
         include:
           - os: ubuntu-latest
             rust: stable
@@ -28,6 +32,10 @@ jobs:
             rust: stable
             target: x86_64-pc-windows-msvc
             artifact_path: target\\release\\
+          - os: macos-latest
+            rust: stable
+            target: x86_64-apple-darwin
+            artifact_path: target/release/
           - os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-gnu
@@ -38,47 +46,49 @@ jobs:
             artifact_path: target\\release\\
 
     steps:
+      # Checkout repository code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Rust (${{ matrix.rust }})
-        # More maintained alternative
+      # Set up Rust toolchain (stable or nightly)
+      - name: Set up Rust (${{ matrix.rust }})
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
           override: true
           targets: ${{ matrix.target }}
-          # Include essential components
           components: rustfmt, clippy
 
-      - name: Cache dependencies
-        uses: actions/cache@v3
+      # Show Rust version info
+      - name: Show Rust version
+        run: rustc --version && cargo --version
+
+      # Cache dependencies and builds
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.rustup
-            ${{ env.CARGO_HOME }}/registry
-            ${{ env.CARGO_HOME }}/git
-            ${{ env.CARGO_TARGET_DIR }}
-          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
 
-      # Checks both lib and bins if they exist
-      # - name: Lint with Clippy
-      #   if: matrix.rust != 'nightly'
-      #   run: |
-      #     cargo clippy --all-targets --all-features -- -D warnings
+      # Run clippy linter (if enabled and on stable)
+      - name: Lint with Clippy
+        if: env.RUN_LINT == 'true' && matrix.rust == 'stable'
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
-      # - name: Check formatting
-      #   if: matrix.rust != 'nightly'
-      #   run: cargo fmt --all -- --check
+      # Check formatting with rustfmt (if enabled and on stable)
+      - name: Check formatting
+        if: env.RUN_LINT == 'true' && matrix.rust == 'stable'
+        run: cargo fmt --all -- --check
 
+      # Run tests (if enabled)
       - name: Run tests
+        if: env.RUN_TESTS == 'true'
         run: cargo test --all-features --verbose --target ${{ matrix.target }}
 
-      - name: Build (all features)
-        run: cargo build --release --all-features --verbose --target ${{ matrix.target }}
+      # Build release binaries
+      - name: Build release binaries
+        run: cargo build --release --bins --all-features --verbose --target ${{ matrix.target }}
 
+      # Output build directory contents for verification
       - name: Verify build output
         run: |
           echo "Build verification:"
@@ -86,37 +96,36 @@ jobs:
           echo "Contents of target directory:"
           ls -laR target/
 
+      # Prepare artifact files from build (if enabled)
       - name: Prepare artifacts
-        if: github.ref == 'refs/heads/main' && matrix.rust != 'nightly'
+        if: github.ref == 'refs/heads/main' && matrix.rust == 'stable' && env.RUN_ARTIFACTS == 'true'
         run: |
-          # Create artifacts directory
           mkdir -p artifacts
 
-          # Debug: List build directory structure
-          echo "Build directory contents:"
-          ls -la target/
+          echo "Listing release dir: ${{ matrix.artifact_path }}"
+          ls -la "${{ matrix.artifact_path }}"
 
-          # Check if release directory exists
-          if [ -d "${{ matrix.artifact_path }}" ]; then
-            echo "Found release binaries:"
-            find "${{ matrix.artifact_path }}" -maxdepth 1 -type f \( -executable -o -name "*.exe" \)
+          BINARIES=$(cargo metadata --format-version=1 --no-deps | jq -r '.packages[].targets[] | select(.kind[] == "bin") | .name')
 
-            # Copy binaries with error suppression
-            find "${{ matrix.artifact_path }}" -maxdepth 1 -type f \( -executable -o -name "*.exe" \) -exec cp -v {} artifacts/ \; || true
-          else
-            echo "Warning: No release directory found at ${{ matrix.artifact_path }}"
-          fi
+          for BIN in $BINARIES; do
+            for EXT in "" ".exe"; do
+              BIN_PATH="${{ matrix.artifact_path }}${BIN}${EXT}"
+              if [ -f "$BIN_PATH" ]; then
+                echo "Copying $BIN_PATH"
+                cp "$BIN_PATH" artifacts/
+              fi
+            done
+          done
 
-          # List collected artifacts
-          echo "Artifacts directory contents:"
+          echo "Final artifacts directory contents:"
           ls -la artifacts/
         shell: bash
 
+      # Upload artifact files (if enabled)
       - name: Upload build artifacts
-        if: github.ref == 'refs/heads/main' && matrix.rust != 'nightly'
+        if: github.ref == 'refs/heads/main' && matrix.rust == 'stable' && env.RUN_ARTIFACTS == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-binaries
+          name: ${{ matrix.os }}-binaries-${{ github.sha }}
           path: artifacts/
           retention-days: 7
-          if-no-files-found: warn
