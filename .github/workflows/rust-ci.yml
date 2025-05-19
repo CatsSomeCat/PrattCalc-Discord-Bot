@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Test combinations of OS and toolchains
+        # Explicit matrix of all valid combinations
         include:
           - os: ubuntu-latest
             rust: stable
@@ -36,9 +36,6 @@ jobs:
             rust: nightly
             target: x86_64-pc-windows-msvc
             artifact_path: target\\release\\
-      exclude:
-        # Exclude nightly from required checks
-        - rust: nightly
 
     steps:
       - name: Checkout code
@@ -68,10 +65,12 @@ jobs:
 
       # Checks both lib and bins if they exist
       # - name: Lint with Clippy
+      #   if: matrix.rust != 'nightly'
       #   run: |
       #     cargo clippy --all-targets --all-features -- -D warnings
 
       # - name: Check formatting
+      #   if: matrix.rust != 'nightly'
       #   run: cargo fmt --all -- --check
 
       - name: Run tests
@@ -88,7 +87,7 @@ jobs:
           ls -laR target/
 
       - name: Prepare artifacts
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && matrix.rust != 'nightly'
         run: |
           # Create artifacts directory
           mkdir -p artifacts
@@ -114,7 +113,7 @@ jobs:
         shell: bash
 
       - name: Upload build artifacts
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && matrix.rust != 'nightly'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-binaries
