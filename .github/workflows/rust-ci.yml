@@ -59,6 +59,10 @@ jobs:
           targets: ${{ matrix.target }}
           components: rustfmt, clippy
 
+      # Ensure target triple is installed for all platforms
+      - name: Ensure Rust target is installed
+        run: rustup target add ${{ matrix.target }}
+        
       # Show Rust version info
       - name: Show Rust version
         run: rustc --version && cargo --version

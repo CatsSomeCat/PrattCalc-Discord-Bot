@@ -38,11 +38,11 @@ use dotenv::dotenv;
 mod tests;
 
 // Local modules
-mod parser;
+mod core;
 
 // Re-exports from local modules
 #[allow(unused_imports)]
-use parser::{Expression, ParseError};
+use core::{Expression, ParseError};
 
 /// Holds each user's variables and input history.
 #[derive(Default)]
