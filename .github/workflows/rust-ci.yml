@@ -21,7 +21,7 @@ jobs:
   ci:
     # Job name shown in GitHub UI
     name: Rust CI (${{ matrix.os }} / ${{ matrix.rust }})
-  
+
     # Specify the OS to run this job on
     runs-on: ${{ matrix.os }}
 
@@ -32,23 +32,28 @@ jobs:
           - os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            artifact_path: target/release/
+            artifact_path: target/x86_64-unknown-linux-gnu/release/
           - os: windows-latest
             rust: stable
             target: x86_64-pc-windows-msvc
-            artifact_path: target\\release\\
+            artifact_path: target/x86_64-pc-windows-msvc/release/
           - os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
-            artifact_path: target/release/
+            artifact_path: target/x86_64-apple-darwin/release/
           - os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-gnu
-            artifact_path: target/release/
+            artifact_path: target/x86_64-unknown-linux-gnu/release/
           - os: windows-latest
             rust: nightly
             target: x86_64-pc-windows-msvc
-            artifact_path: target\\release\\
+            artifact_path: target/x86_64-pc-windows-msvc/release/
+
+    # Force bash shell to ensure compatibility across OSes
+    defaults:
+      run:
+        shell: bash
 
     steps:
       # Checkout the source code
@@ -113,6 +118,17 @@ jobs:
           echo "Contents of target directory:"
           ls -laR target/
 
+      # Install jq for parsing cargo metadata
+      - name: Install jq
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y jq
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            brew install jq
+          else
+            echo "jq assumed to be available on Windows via Git Bash"
+          fi
+
       # Copy binaries to a separate artifacts/ directory (only for stable toolchain on main branch)
       - name: Prepare artifacts
         if: github.ref == 'refs/heads/main' && matrix.rust == 'stable' && env.RUN_ARTIFACTS == 'true'
@@ -138,7 +154,6 @@ jobs:
 
           echo "Final artifacts directory contents:"
           ls -la artifacts/
-        shell: bash
 
       # Upload compiled binaries as workflow artifacts for later download
       - name: Upload build artifacts

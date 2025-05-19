@@ -260,7 +260,7 @@ async fn handle_vars(
     };
 
     let embed = CreateEmbed::new()
-        .title("📊 Your Variables")
+        .title("Your Variables")
         .description(description)
         .colour(Colour::BLITZ_BLUE)
         .footer(CreateEmbedFooter::new(
