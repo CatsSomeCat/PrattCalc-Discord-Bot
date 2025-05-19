@@ -14,111 +14,110 @@ env:
 
 jobs:
   ci:
-    name: Rust CI
+    name: Rust CI (${{ matrix.os }} / ${{ matrix.rust }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        # Test multiple toolchain versions if needed
-        rust: [stable, nightly]
+        # Test combinations of OS and toolchains
         include:
           - os: ubuntu-latest
+            rust: stable
             target: x86_64-unknown-linux-gnu
             artifact_path: target/release/
           - os: windows-latest
+            rust: stable
             target: x86_64-pc-windows-msvc
+            artifact_path: target\\release\\
+          - os: ubuntu-latest
+            rust: nightly
+            target: x86_64-unknown-linux-gnu
             artifact_path: target/release/
-        exclude:
-          # Exclude nightly from required checks
-          - rust: nightly
-    
+          - os: windows-latest
+            rust: nightly
+            target: x86_64-pc-windows-msvc
+            artifact_path: target\\release\\
+      exclude:
+        # Exclude nightly from required checks
+        - rust: nightly
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install Rust (${{ matrix.rust }})
-    # More maintained alternative
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust }}
-        targets: ${{ matrix.target }}
-        # Include essential components
-        components: rustfmt, clippy
+      - name: Install Rust (${{ matrix.rust }})
+        # More maintained alternative
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
+          targets: ${{ matrix.target }}
+          # Include essential components
+          components: rustfmt, clippy
 
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ${{ env.CARGO_HOME }}/registry
-          ${{ env.CARGO_HOME }}/git
-          ${{ env.CARGO_TARGET_DIR }}
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.rustup
+            ${{ env.CARGO_HOME }}/registry
+            ${{ env.CARGO_HOME }}/git
+            ${{ env.CARGO_TARGET_DIR }}
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-    # Checks both lib and bins if they exist
-    # - name: Lint with Clippy
-    #   run: |
-    #     cargo clippy --package ppaaeedb \
-    #       --all-targets \
-    #       --all-features \
-    #       -- -D warnings
+      # Checks both lib and bins if they exist
+      # - name: Lint with Clippy
+      #   run: |
+      #     cargo clippy --all-targets --all-features -- -D warnings
 
-    # - name: Check formatting
-    #   run: cargo fmt --all -- --check
+      # - name: Check formatting
+      #   run: cargo fmt --all -- --check
 
-    - name: Run tests
-      run: cargo test --all-features --verbose --target ${{ matrix.target }}
+      - name: Run tests
+        run: cargo test --all-features --verbose --target ${{ matrix.target }}
 
-    - name: Build (all features)
-      run: cargo build --all-features --verbose --target ${{ matrix.target }}
+      - name: Build (all features)
+        run: cargo build --release --all-features --verbose --target ${{ matrix.target }}
 
-    - name: Verify build output
-      run: |
-        echo "Build verification:"
-        cargo metadata --format-version=1 | jq .target_directory
-        find . -name "target" -type d
-        ls -laR target/
+      - name: Verify build output
+        run: |
+          echo "Build verification:"
+          echo "Current directory: $(pwd)"
+          echo "Contents of target directory:"
+          ls -laR target/
 
-    - name: Prepare artifacts
-      if: github.ref == 'refs/heads/main'
-      run: |
-        # Create artifacts directory
-        mkdir -p artifacts
-        
-        # Debug: List build directory structure
-        echo "Current directory: $(pwd)"
-        echo "Build directory contents:"
-        ls -la target/
-        
-        # Check if release directory exists
-        if [ -d "target/release/" ]; then
-          echo "Found release binaries:"
-          find target/release/ -maxdepth 1 -type f \( -executable -o -name "*.exe" \)
-          
-          # Copy binaries with error suppression
-          find target/release/ -maxdepth 1 -type f \( -executable -o -name "*.exe" \) -exec cp -v {} artifacts/ \; || true
-        else
-          echo "Warning: No release directory found at target/release/"
-          echo "Checking alternative locations..."
-          
-          # Fallback to target/<triple>/release/
-          if [ -d "target/${{ matrix.target }}/release/" ]; then
-            echo "Found alternative release directory:"
-            find target/${{ matrix.target }}/release/ -maxdepth 1 -type f \( -executable -o -name "*.exe" \) -exec cp -v {} artifacts/ \; || true
+      - name: Prepare artifacts
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Create artifacts directory
+          mkdir -p artifacts
+
+          # Debug: List build directory structure
+          echo "Build directory contents:"
+          ls -la target/
+
+          # Check if release directory exists
+          if [ -d "${{ matrix.artifact_path }}" ]; then
+            echo "Found release binaries:"
+            find "${{ matrix.artifact_path }}" -maxdepth 1 -type f \( -executable -o -name "*.exe" \)
+
+            # Copy binaries with error suppression
+            find "${{ matrix.artifact_path }}" -maxdepth 1 -type f \( -executable -o -name "*.exe" \) -exec cp -v {} artifacts/ \; || true
+          else
+            echo "Warning: No release directory found at ${{ matrix.artifact_path }}"
           fi
-        fi
-        
-        # List collected artifacts
-        echo "Artifacts directory contents:"
-        ls -la artifacts/
-      shell: bash
 
-    - name: Upload build artifacts
-      if: github.ref == 'refs/heads/main'
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ runner.os }}-binaries
-        path: artifacts/
-        retention-days: 7
-        if-no-files-found: warn
+          # List collected artifacts
+          echo "Artifacts directory contents:"
+          ls -la artifacts/
+        shell: bash
+
+      - name: Upload build artifacts
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-binaries
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn
