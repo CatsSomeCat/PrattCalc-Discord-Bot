@@ -11,20 +11,21 @@ use tokio::sync::Mutex;
 // Serenity (Discord library) imports
 use serenity::all::*;
 // use serenity::model::channel::Message;
-use serenity::model::gateway::Ready;
+// use serenity::model::gateway::Ready;
+use serenity::gateway::ShardManager;
 // use serenity::model::id::GuildId;
-// use serenity::prelude::*;
+use serenity::prelude::*;
 
 // System monitoring
 use sysinfo::{
     System, 
 
     // Traits needed for older versions
+    // For newer versions (0.26+), some traits might not be needed
     SystemExt, 
     ComponentExt, 
     CpuExt
 };
-// For newer versions (0.26+), some traits might not be needed
 
 // Logging utilities
 #[allow(unused_imports)]
@@ -43,6 +44,15 @@ mod core;
 // Re-exports from local modules
 #[allow(unused_imports)]
 use core::{Expression, ParseError};
+
+/// This implementation tells the TypeMap that `ShardManagerContainer` is the key, and its
+/// associated value is an `Arc<ShardManager>` object.
+struct ShardManagerContainer;
+
+// A TypeMap key used to store and access the ShardManager instance in Serenity's Context.
+impl TypeMapKey for ShardManagerContainer {
+    type Value = Arc<ShardManager>;
+}
 
 /// Holds each user's variables and input history.
 #[derive(Default)]
@@ -64,21 +74,21 @@ struct Bot {
 
 #[async_trait]
 impl EventHandler for Bot {
-    /// Handles all interactions: slash commands and context commands.
+    /// Handles all interactions, such as, slash commands, context commands and etc.
     async fn interaction_create(&self, context: Context, interaction: Interaction) {
         match interaction {
             // Both slash commands and context menu commands now come through as Interaction::Command
-            Interaction::Command(command_interaction) => {
-                let user_id = command_interaction.user.id.get();
+            Interaction::Command(interaction) => {
+                let user_id = interaction.user.id.get();
                 let mut state_guard = self.state.lock().await;
                 let session = state_guard.sessions.entry(user_id).or_default();
 
                 // Otherwise handle as slash command
-                match command_interaction.data.name.as_str() {
-                    "evaluate" => handle_evaluate(&context, &command_interaction, session).await,
-                    "vars" => handle_vars(&context, &command_interaction, session).await,
-                    "clear" => handle_clear(&context, &command_interaction, session).await,
-                    "status" => handle_status(&context, &command_interaction).await,
+                match interaction.data.name.as_str() {
+                    "evaluate" => handle_evaluate(&context, &interaction, session).await,
+                    "vars" => handle_vars(&context, &interaction, session).await,
+                    "clear" => handle_clear(&context, &interaction, session).await,
+                    "status" => handle_status(&context, &interaction).await,
                     _ => {}
                 }
             }
@@ -112,29 +122,30 @@ impl EventHandler for Bot {
 
         // Register each slash command globally
         for command in slash_commands {
-            if let Err(e) = Command::create_global_command(&context.http, command).await {
-                error!("Failed to register slash command: {:?}", e);
+            if let Err(err) = Command::create_global_command(&context.http, command).await {
+                error!("Failed to register slash command: {:?}", err);
             }
         }
 
         // Register a message context menu command
         let context_menu = CreateCommand::new("Evaluate code block")
             .kind(CommandType::Message);
-        if let Err(e) = Command::create_global_command(&context.http, context_menu).await {
-            error!("Failed to register context command: {:?}", e);
+        if let Err(err) = Command::create_global_command(&context.http, context_menu).await {
+            error!("Failed to register context command: {:?}", err);
         }
     }
 }
 
 /// Handles the `/evaluate` slash command for mathematical expressions.
+/// 
 /// Supports variable assignments and complex calculations with clear error reporting.
 async fn handle_evaluate(
-    http_context: &Context,
-    command_interaction: &CommandInteraction,
+    context: &Context,
+    interaction: &CommandInteraction,
     session: &mut UserSession,
 ) {
     // Extract and clean input
-    let input = command_interaction
+    let input = interaction
         .data
         .options
         .first()
@@ -143,7 +154,7 @@ async fn handle_evaluate(
         .trim();
 
     if input.is_empty() {
-        send_error(http_context, command_interaction, "Please provide an expression to evaluate.").await;
+        send_error(context, interaction, "Please provide an expression to evaluate.").await;
         return;
     }
 
@@ -152,16 +163,16 @@ async fn handle_evaluate(
         Ok(list) if !list.is_empty() => list,
         Ok(_) => {
             send_error(
-                http_context,
-                command_interaction,
+                context,
+                interaction,
                 "No valid expressions found in input.",
             ).await;
             return;
         }
         Err(e) => {
             send_error(
-                http_context,
-                command_interaction,
+                context,
+                interaction,
                 &format!("```fix\nSyntax Error:\n{}\n```", e),
             ).await;
             return;
@@ -175,8 +186,8 @@ async fn handle_evaluate(
             // Variable assignment with limit enforcement
             if !session.variables.contains_key(&var_name) && session.variables.len() >= 25 {
                 send_error(
-                    http_context,
-                    command_interaction,
+                    context,
+                    interaction,
                     "Variable limit reached (max 25).\nUse `/clear` to reset your session.",
                 ).await;
                 return;
@@ -189,8 +200,8 @@ async fn handle_evaluate(
                 }
                 Err(err) => {
                     send_error(
-                        http_context,
-                        command_interaction,
+                        context,
+                        interaction,
                         &format!("```fix\nError in expression {}:\n{}\n```", i + 1, err),
                     ).await;
                     return;
@@ -201,8 +212,8 @@ async fn handle_evaluate(
                 Ok(val) => Some((format!("[{}] = {}", i + 1, val), val)),
                 Err(err) => {
                     send_error(
-                        http_context,
-                        command_interaction,
+                        context,
+                        interaction,
                         &format!("```fix\nError in expression {}:\n{}\n```", i + 1, err),
                     ).await;
                     return;
@@ -219,10 +230,15 @@ async fn handle_evaluate(
     session.history.push(input.to_string());
     let embed = CreateEmbed::new()
         .title("Evaluation Successful")
-        .description(format!("```\n{}\n```\n**Result:** `{}`", input, last_value))
+        .description(format!(
+            "**Input:**\n```ts\n{}\n```\n\
+            **Result:**\n```rs\n{}\n```",
+            input.trim(),
+            last_value
+        ))
         .colour(Colour::DARK_GREEN)
         .footer(CreateEmbedFooter::new(format!(
-            "Session contains {} variables | History length: {}",
+            "Session contains `{}` variables and `{}` history entries",
             session.variables.len(),
             session.history.len()
         )));
@@ -233,15 +249,15 @@ async fn handle_evaluate(
             .ephemeral(false),
     );
 
-    if let Err(err) = command_interaction.create_response(&http_context.http, response).await {
+    if let Err(err) = interaction.create_response(&context.http, response).await {
         error!("Failed to send evaluation response: {:?}", err);
     }
 }
 
 /// Handles the `/vars` command to display all user variables in a formatted list.
 async fn handle_vars(
-    http_context: &Context,
-    command_interaction: &CommandInteraction,
+    context: &Context,
+    interaction: &CommandInteraction,
     session: &UserSession,
 ) {
     let description = if session.variables.is_empty() {
@@ -262,10 +278,7 @@ async fn handle_vars(
     let embed = CreateEmbed::new()
         .title("Your Variables")
         .description(description)
-        .colour(Colour::BLITZ_BLUE)
-        .footer(CreateEmbedFooter::new(
-            "Use `/evaluate` to modify or `/clear` to reset",
-        ));
+        .colour(Colour::BLITZ_BLUE);
 
     let response = CreateInteractionResponse::Message(
         CreateInteractionResponseMessage::new()
@@ -273,15 +286,15 @@ async fn handle_vars(
             .ephemeral(false),
     );
 
-    if let Err(err) = command_interaction.create_response(&http_context.http, response).await {
+    if let Err(err) = interaction.create_response(&context.http, response).await {
         error!("Failed to send variables response: {:?}", err);
     }
 }
 
-/// Handles the /clear slash command.
+/// Handles the `/clear` slash command.
 async fn handle_clear(
-    http_context: &Context,
-    command_interaction: &CommandInteraction,
+    context: &Context,
+    interaction: &CommandInteraction,
     session: &mut UserSession,
 ) {
     session.variables.clear();
@@ -294,8 +307,8 @@ async fn handle_clear(
     let response = CreateInteractionResponse::Message(
         CreateInteractionResponseMessage::new().embed(embed),
     );
-    if let Err(e) = command_interaction.create_response(&http_context.http, response).await {
-        error!("Failed to send clear response: {:?}", e);
+    if let Err(err) = interaction.create_response(&context.http, response).await {
+        error!("Failed to send clear response: {:?}", err);
     }
 }
 
@@ -307,7 +320,7 @@ fn format_uptime(seconds: u64) -> String {
     format!("`{}d {}h {}m`", days, hours, minutes)
 }
 
-fn format_memory(system: &System) -> String {
+fn format_memory(system: &mut System) -> String {
     let used_mem = system.used_memory() as f64 / 1024.0 / 1024.0;
     let total_mem = system.total_memory() as f64 / 1024.0 / 1024.0;
     format!("`{:.1}MB / {:.1}MB ({:.0}%)`", 
@@ -316,61 +329,79 @@ fn format_memory(system: &System) -> String {
            (used_mem / total_mem) * 100.0)
 }
 
-fn format_cpu(system: &System) -> String {
+fn format_cpu(system: &mut System) -> String {
     // Handle different versions of sysinfo
     let cpu_usage = system.global_cpu_info().cpu_usage();
     let cpu_count = system.cpus().len();
     format!("`{:.1}%` usage ({} cores)", cpu_usage, cpu_count)
 }
 
-fn format_temperature(system: &System) -> String {
+fn format_temperature(system: &mut System) -> String {
     system.components()
         .iter()
-        .find(|c| c.label().contains("CPU"))
-        .map_or("`N/A`".to_string(), |c| {
-            format!("`{:.1}°C`", c.temperature())
+        .find(|component| component.label().contains("CPU"))
+        .map_or("`N/A`".to_string(), |component| {
+            format!("`{:.2}°C`", component.temperature())
         })
 }
 
-/// Handles the /status slash command with detailed system info
+/// Handles the `/status` slash command with detailed system info.
 async fn handle_status(
-    http_context: &Context,
-    command_interaction: &CommandInteraction,
+    context: &Context,
+    interaction: &CommandInteraction,
 ) {
-    // Start timing for latency measurement
-    let start_time = Instant::now();
+    // Access the ShardManager from Context.data
+    let data_read = context.data.read().await;
+    let shard_manager_lock = data_read
+        .get::<ShardManagerContainer>()
+        .expect("Expected ShardManagerContainer in TypeMap")
+        .clone();
 
-    // Get system information - refresh what you need
+    // Look up the single shard's runner info (shard ID 0)
+    let runners = &shard_manager_lock.runners;
+    let runners_guard = runners.lock().await;
+    let runner_info = runners_guard
+        .get(&ShardId(0))
+        .expect("Shard 0 runner not found");
+
+    // Retrieve the WebSocket latency
+    let latency_display = match runner_info.latency {
+        Some(duration) => format!("`{}ms`", duration.as_millis()),
+        None => "`N/A`".to_string(),
+    };
+
+    // Get system information; refresh what you need
     let mut system = System::new();
-    system.refresh_cpu();      // Need this for CPU info
-    system.refresh_memory();   // Need this for memory info
-    system.refresh_components(); // Need this for temperature
-    system.refresh_processes(); // Need this for process count
-
-    // Calculate latency
-    let latency = start_time.elapsed();
+    system.refresh_cpu();                // Need this for CPU info
+    system.refresh_memory();             // Need this for memory info
+    // Update their current temperatures
+    system.refresh_components();         // refreshes temperature readings
+    // Populate the components list
+    system.refresh_components_list();    // loads the available sensors
+    system.refresh_processes();          // Need this for process count
 
     // Format system information
     let embed = CreateEmbed::new()
         .title("System Status")
         .colour(Colour::DARK_GREEN)
-        .field("Bot Latency", format!("`{}ms`", latency.as_millis()), true)
+        .field("WebSocket Latency", latency_display, true)
         .field("Uptime", format_uptime(system.uptime()), true)
-        .field("Memory", format_memory(&system), false)
-        .field("CPU", format_cpu(&system), false)
+        .field("Memory", format_memory(&mut system), false)
+        .field("CPU", format_cpu(&mut system), false)
         .field("Processes", format!("`{}` running", system.processes().len()), true)
-        .field("Temperature", format_temperature(&system), true);
+        .field("Temperature", format_temperature(&mut system), true);
 
     let response = CreateInteractionResponse::Message(
         CreateInteractionResponseMessage::new().embed(embed)
     );
 
-    if let Err(err) = command_interaction.create_response(&http_context.http, response).await {
+    if let Err(err) = interaction.create_response(&context.http, response).await {
         error!("Failed to send status response: {:?}", err);
     }
 }
 
-/// Utility: send a simple error embed with a formatted message.
+/// Utility, sends a simple error embed with a formatted message.
+/// 
 /// The error message will be displayed in a clean code block format.
 async fn send_error(
     context: &Context,
@@ -394,16 +425,36 @@ async fn send_error(
 
 #[tokio::main]
 async fn main() {
-    dotenv().ok(); env_logger::init();
+    // Load environment variables from a .env file, ignoring errors if the file is missing
+    dotenv().ok();
 
-    let token = std::env::var("DISCORD_TOKEN").expect("Expected DISCORD_TOKEN in .env");
+    // Initialize the logger (env_logger) to enable logging based on the environment variable
+    env_logger::init();
+
+    // Retrieve the Discord bot token from environment variables
+    let token = std::env::var("DISCORD_TOKEN")
+        .expect("Expected DISCORD_TOKEN in .env or environment");
+
+    // Specify the gateway intents for the bot
     let intents = GatewayIntents::non_privileged();
 
+    // Build the Discord client with the token, intents, and an event handler
     let mut client = Client::builder(&token, intents)
-        .event_handler(Bot { state: Arc::new(Mutex::new(SharedState::default())) })
+        .event_handler(Bot {
+            state: Arc::new(Mutex::new(SharedState::default())),
+        })
         .await
-        .expect("Error creating client");
+        .expect("Error creating Discord client");
 
+    // This is necessary to access shard-specific information (like latency) from commands
+    // Even with a single shard (default), Serenity uses a shard manager internally
+    {
+        let mut data = client.data.write().await;
+        data.insert::<ShardManagerContainer>(client.shard_manager.clone());
+    }
+
+    // Start the client, which will connect to Discord and begin handling events
+    // If the client fails to start or crashes, log the error
     if let Err(err) = client.start().await {
         error!("Client error: {:?}", err);
     }

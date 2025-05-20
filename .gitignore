@@ -10,7 +10,8 @@
 # Rust-specific ignores
 /target/
 # Rust build output directory - contains compiled binaries and intermediates
-Cargo.lock
+# Lock file is required for build automation speedup
+# Cargo.lock 
 # For libraries, this should be committed, but for applications it's typically ignored
 
 # Debug files
