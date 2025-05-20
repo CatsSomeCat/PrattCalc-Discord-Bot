@@ -15,7 +15,8 @@ env:
   CARGO_TARGET_DIR: target     # Build output directory
   RUN_LINT: false              # Set to 'false' to skip clippy and formatting checks
   RUN_TESTS: false             # Set to 'false' to skip running tests
-  RUN_ARTIFACTS: true          # Build and upload artifacts if true
+  RUN_ARTIFACTS: true          # Seto to 'true' to build and upload artifacts
+  RUN_NIGHTLY: false           # Whether to run nightly builds at all
 
 jobs:
   ci:
@@ -41,6 +42,8 @@ jobs:
             rust: stable
             target: x86_64-apple-darwin
             artifact_path: target/x86_64-apple-darwin/release/
+
+          # Nightly entries below will be skipped unless enabled explicitly
           - os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-gnu
@@ -108,10 +111,12 @@ jobs:
 
       # Build release binaries for all binaries in the crate
       - name: Build release binaries
+        if: matrix.rust == 'stable' || env.RUN_NIGHTLY == 'true'
         run: cargo build --release --bins --all-features --verbose --target ${{ matrix.target }}
 
       # Output contents of build directory for troubleshooting and verification
       - name: Verify build output
+        if: matrix.rust == 'stable' || env.RUN_NIGHTLY == 'true'
         run: |
           echo "Build verification:"
           echo "Current directory: $(pwd)"
