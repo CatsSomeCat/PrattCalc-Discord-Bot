@@ -83,17 +83,6 @@ jobs:
       - name: Show Rust version
         run: rustc --version && cargo --version
 
-      # Cache Rust build artifacts and dependencies
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry               # Registry cache
-            ~/.cargo/git                    # Git cache
-            target                          # Build output directory
-          # Cache key based on OS and lockfile hash
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
       # Run clippy to catch common mistakes and improve code (only if linting is enabled and toolchain is stable)
       - name: Lint with Clippy
         if: env.RUN_LINT == 'true' && matrix.rust == 'stable'
@@ -122,6 +111,22 @@ jobs:
           echo "Current directory: $(pwd)"
           echo "Contents of target directory:"
           ls -laR target/
+
+      - name: Ensure cargo directories exist
+        run: |
+          mkdir -p ~/.cargo/registry
+          mkdir -p ~/.cargo/git
+
+      # Cache Rust build artifacts and dependencies
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry               # Registry cache
+            ~/.cargo/git                    # Git cache
+            target                          # Build output directory
+          # Cache key based on OS and lockfile hash
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       # Install jq for parsing cargo metadata
       - name: Install jq
