@@ -1,0 +1,22 @@
+// This is a test script for the calculator
+
+// Define some variables
+let x = 10;
+let y = 5;
+
+// Do some calculations
+let result = x + y * 2;
+
+// Show the result
+result
+
+// Try some other operations
+x * y
+x / y
+x ^ 2
+
+// Using functions
+sqrt(x)
+
+// Try a complex calculation
+result = (x + y) * (x - y) / 2

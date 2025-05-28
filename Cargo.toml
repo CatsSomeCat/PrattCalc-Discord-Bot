@@ -1,34 +1,85 @@
 [package]
 name = "ppaaeedb"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
+description = "A Discord bot calculator using Pratt Parsing for expression evaluation"
+authors = ["ElysianCat"]
+readme = "README.md"
+repository = "https://github.com/CatsSomeCat/PrattCalc-Discord-Bot"
+license = "MIT"
+keywords = ["calculator", "discord", "bot", "pratt", "parsing"]
+categories = ["mathematics", "parser-implementations", "command-line-utilities"]
 
-# Core Dependencies
+# Define features
+[features]
+default = []
+cli = []  # Feature flag for CLI functionality
+
+# Exclude src folder from testing
+[package.metadata.cargo-nextest]
+exclude-dirs = ["src"]
+
+# Library configuration for core calculator implementation
+[lib]
+name = "ppaaeedb"
+path = "src/lib.rs"
+doctest = false  # Disable documentation tests
+test = false     # Disable tests for the library
+
+# Binary configuration for Discord bot executable
+[[bin]]
+name = "ppaaeedb"
+path = "src/main.rs"
+test = false  # Disable tests for the binary
+
+# Binary configuration for CLI calculator executable
+[[bin]]
+name = "ppaaeecli"
+path = "src/bin/ppaaeecli.rs"
+test = false  # Disable tests for the CLI calculator
+required-features = ["cli"]  # Disable compilation since "cli" feature is not defined
+
 [dependencies]
-dotenv = "0.15.0"  # Environment variable loader
-sysinfo = "0.29.0"  # System information (not latest stable version but compatible with serenity)
+# Core Calculator Dependencies
+rand = "0.8.5"                # Random number generation for rand() function
+lazy_static = "1.4.0"         # Lazily initialized static variables for global constants
+
+# Environment and Configuration
+dotenv = "0.15.0"             # Environment variable loader for bot configuration
+sysinfo = "0.29.0"            # System information for diagnostics
 
 # Logging
-env_logger = "0.11.3"  # Environment-aware logging
-log = "0.4.21"  # Logging facade
+env_logger = "0.11.3"         # Environment-aware logging configuration 
+log = "0.4.21"                # Logging facade for structured logging
 
-# Async/Networking
-reqwest = { version = "0.12.4", features = ["socks", "rustls-tls"] }  # HTTP client (latest with rustls)
-tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }  # Async runtime
+# Async Runtime and Networking
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }  # Async runtime for Discord bot
+reqwest = { version = "0.12.4", features = ["socks", "rustls-tls"] }      # HTTP client for API calls
+
+# Date/Time and Utility
+chrono = "0.4.41"             # Date and time utilities
+once_cell = "1.21.3"          # Single-initialization cell for global data
 
 # Discord API Wrapper
 [dependencies.serenity]
-version = "0.12.4"  # Latest stable
-default-features = false
+version = "0.12.4"            # Discord API wrapper, latest stable
+default-features = false      # Disable default features for custom configuration
 features = [
-    "builder",         # Command builder utilities
-    "chrono",          # DateTime support
-    "client",          # Discord client core
-    "framework",       # Command framework
-    "gateway",         # Websocket connection
-    "http",            # REST API support
-    "model",           # Discord data models
-    "standard_framework", # Default command framework
-    "utils",           # Helper utilities
-    "rustls_backend",  # TLS via rustls (recommended over native-tls)
+    "builder",                # Command builder utilities
+    "chrono",                 # DateTime support
+    "client",                 # Discord client core functionality
+    "framework",              # Command framework for bot commands
+    "gateway",                # WebSocket connection to Discord
+    "http",                   # REST API support for Discord API
+    "model",                  # Discord data models
+    "standard_framework",     # Default command framework helpers
+    "utils",                  # Helper utilities
+    "rustls_backend",         # TLS via rustls (more secure than native-tls)
 ]
+
+[profile.release]
+lto = true                    # Link-time optimization for better performance
+codegen-units = 1             # Optimize for size rather than compile time
+opt-level = 3                 # Maximum optimization
+strip = true                  # Strip debug symbols to reduce binary size
+panic = "abort"               # Abort on panic for smaller binaries

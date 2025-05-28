@@ -17,41 +17,48 @@ env:
   RUN_TESTS: false             # Set to 'false' to skip running tests
   RUN_ARTIFACTS: true          # Seto to 'true' to build and upload artifacts
   RUN_NIGHTLY: false           # Whether to run nightly builds at all
+  ENABLE_CACHING: false        # Whether to enable cargo dependency caching
 
 jobs:
+  # First job to determine what matrix builds to run
+  matrix-prep:
+    name: Prepare Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          # Always include stable builds
+          STABLE_BUILDS='[
+            {"os": "ubuntu-latest", "rust": "stable", "target": "x86_64-unknown-linux-gnu", "artifact_path": "target/x86_64-unknown-linux-gnu/release/"},
+            {"os": "windows-latest", "rust": "stable", "target": "x86_64-pc-windows-msvc", "artifact_path": "target/x86_64-pc-windows-msvc/release/"},
+            {"os": "macos-latest", "rust": "stable", "target": "x86_64-apple-darwin", "artifact_path": "target/x86_64-apple-darwin/release/"}
+          ]'
+          
+          # Include nightly builds only if RUN_NIGHTLY is true
+          if [[ "${{ env.RUN_NIGHTLY }}" == "true" ]]; then
+            NIGHTLY_BUILDS=', 
+              {"os": "ubuntu-latest", "rust": "nightly", "target": "x86_64-unknown-linux-gnu", "artifact_path": "target/x86_64-unknown-linux-gnu/release/"},
+              {"os": "windows-latest", "rust": "nightly", "target": "x86_64-pc-windows-msvc", "artifact_path": "target/x86_64-pc-windows-msvc/release/"}
+            '
+          else
+            NIGHTLY_BUILDS=''
+          fi
+          
+          # Combine builds into final matrix
+          echo "matrix={\"include\": $(echo $STABLE_BUILDS | sed "s/]/$NIGHTLY_BUILDS]/")}" >> $GITHUB_OUTPUT
+
   ci:
     # Job name shown in GitHub UI
     name: Rust CI (${{ matrix.os }} / ${{ matrix.rust }})
-
+    needs: matrix-prep
+    
     # Specify the OS to run this job on
     runs-on: ${{ matrix.os }}
-
+    
     strategy:
-      matrix:
-        include:
-          # Each entry in the matrix defines a combination of OS, Rust version, and build target
-          - os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            artifact_path: target/x86_64-unknown-linux-gnu/release/
-          - os: windows-latest
-            rust: stable
-            target: x86_64-pc-windows-msvc
-            artifact_path: target/x86_64-pc-windows-msvc/release/
-          - os: macos-latest
-            rust: stable
-            target: x86_64-apple-darwin
-            artifact_path: target/x86_64-apple-darwin/release/
-
-          # Nightly entries below will be skipped unless enabled explicitly
-          - os: ubuntu-latest
-            rust: nightly
-            target: x86_64-unknown-linux-gnu
-            artifact_path: target/x86_64-unknown-linux-gnu/release/
-          - os: windows-latest
-            rust: nightly
-            target: x86_64-pc-windows-msvc
-            artifact_path: target/x86_64-pc-windows-msvc/release/
+      matrix: ${{ fromJSON(needs.matrix-prep.outputs.matrix) }}
 
     # Force bash shell to ensure compatibility across OSes
     defaults:
@@ -100,12 +107,12 @@ jobs:
 
       # Build release binaries for all binaries in the crate
       - name: Build release binaries
-        if: matrix.rust == 'stable' || env.RUN_NIGHTLY == 'true'
+        if: (matrix.rust == 'stable') || (matrix.rust == 'nightly' && env.RUN_NIGHTLY == 'true')
         run: cargo build --release --bins --all-features --verbose --target ${{ matrix.target }}
 
       # Output contents of build directory for troubleshooting and verification
       - name: Verify build output
-        if: matrix.rust == 'stable' || env.RUN_NIGHTLY == 'true'
+        if: (matrix.rust == 'stable') || (matrix.rust == 'nightly' && env.RUN_NIGHTLY == 'true')
         run: |
           echo "Build verification:"
           echo "Current directory: $(pwd)"
@@ -119,6 +126,7 @@ jobs:
 
       # Cache Rust build artifacts and dependencies
       - name: Cache Rust dependencies
+        if: env.ENABLE_CACHING == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -141,7 +149,7 @@ jobs:
 
       # Copy binaries to a separate artifacts/ directory (only for stable toolchain on main branch)
       - name: Prepare artifacts
-        if: github.ref == 'refs/heads/main' && matrix.rust == 'stable' && env.RUN_ARTIFACTS == 'true'
+        if: github.ref == 'refs/heads/main' && ((matrix.rust == 'stable') || (matrix.rust == 'nightly' && env.RUN_NIGHTLY == 'true')) && env.RUN_ARTIFACTS == 'true'
         run: |
           mkdir -p artifacts
 
@@ -167,7 +175,7 @@ jobs:
 
       # Upload compiled binaries as workflow artifacts for later download
       - name: Upload build artifacts
-        if: github.ref == 'refs/heads/main' && matrix.rust == 'stable' && env.RUN_ARTIFACTS == 'true'
+        if: github.ref == 'refs/heads/main' && ((matrix.rust == 'stable') || (matrix.rust == 'nightly' && env.RUN_NIGHTLY == 'true')) && env.RUN_ARTIFACTS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-binaries-${{ github.sha }}
