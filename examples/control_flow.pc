@@ -1,0 +1,80 @@
+// Control Flow Example
+
+// If-else statements
+let x = 10;
+let result = 0;
+
+// Basic if-else
+if x > 5 {
+    result = 1;
+} else {
+    result = 0;
+}
+result;  // 1
+
+// Nested if statements
+if x > 0 {
+    if x < 10 {
+        result = 2;
+    } else {
+        result = 3;
+    }
+} else {
+    result = 4;
+}
+result;  // 3
+
+// Multiple conditions
+let y = 20;
+if x > 5 && y > 15 {
+    result = 5;
+} else {
+    result = 6;
+}
+result;  // 5
+
+// While loop basics
+let sum = 0;
+let i = 1;
+while i <= 5 {
+    sum = sum + i;
+    i = i + 1;
+}
+sum;  // 1+2+3+4+5 = 15
+
+// While loop with conditional break
+let counter = 0;
+let total = 0;
+while counter < 100 {
+    total = total + counter;
+    counter = counter + 1;
+    
+    if total > 50 {
+        // We'll stop the loop if total exceeds 50
+        break;
+    }
+}
+total;  // Sum until total > 50 (stops at 55)
+counter;  // Should be 11
+
+// Nested loops
+let outer = 1;
+let inner_sum = 0;
+while outer <= 3 {
+    let inner = 1;
+    while inner <= outer {
+        inner_sum = inner_sum + (outer * inner);
+        inner = inner + 1;
+    }
+    outer = outer + 1;
+}
+inner_sum;  // (1*1) + (2*1) + (2*2) + (3*1) + (3*2) + (3*3) = 1 + 2 + 4 + 3 + 6 + 9 = 25
+
+// Early termination with the end keyword
+let final_value = 100;
+if final_value > 50 {
+    end final_value * 2;  // This will terminate the program with value 200
+}
+
+// Code after the end statement never executes
+let never_reached = 999; 

@@ -1,0 +1,63 @@
+// End Keyword Example
+
+// The end keyword terminates program execution and returns a value
+
+// Basic usage - terminates immediately
+// end 42;  // Uncomment to terminate with value 42
+
+// Using end with an expression
+let x = 10;
+let y = 20;
+// end x + y;  // Uncomment to terminate with value 30
+
+// Using end in a conditional block
+let temperature = 75;
+
+if temperature > 100 {
+    // This won't execute because temperature is 75
+    end 1;
+} else if temperature < 0 {
+    // This won't execute because temperature is 75
+    end 2;
+}
+
+// End in nested blocks
+{
+    let inner_value = 123;
+    {
+        let deeper_value = 456;
+        // end inner_value + deeper_value;  // Uncomment to terminate with 579
+    }
+}
+
+// End in loops
+let counter = 0;
+let sum = 0;
+
+while counter < 10 {
+    counter = counter + 1;
+    sum = sum + counter;
+    
+    if sum > 30 {
+        // End once sum exceeds 30
+        // end sum;  // Uncomment to terminate when sum > 30
+    }
+}
+
+// End with function results
+fn calculate_area(width, height) {
+    width * height
+}
+
+let area = calculate_area(5, 10);  // 50
+
+// Using function results with end
+// end area * 2;  // Uncomment to terminate with 100
+
+// End in complex expression
+let a = 5;
+let b = 10;
+let c = 15;
+
+// End with a complex calculation
+end a * b + c * (a + b);  // 5 * 10 + 15 * (5 + 10) = 50 + 15 * 15 = 50 + 225 = 275 

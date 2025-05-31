@@ -1,6 +1,6 @@
 [package]
 name = "ppaaeedb"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "A Discord bot calculator using Pratt Parsing for expression evaluation"
 authors = ["ElysianCat"]

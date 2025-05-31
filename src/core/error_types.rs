@@ -184,8 +184,35 @@ pub enum ControlFlowError {
     /// A return statement was encountered outside a function.
     ReturnOutsideFunction,
     
+    /// Invalid return statement usage
+    InvalidReturnStatement(String),
+    
     /// Feature is not implemented.
     UnimplementedFeature(String),
+    
+    /// Function or procedure already defined.
+    FunctionOrProcedureAlreadyDefined {
+        /// Name of the callable item
+        name: String,
+        /// Type of the callable item ("function" or "procedure")
+        kind: String,
+    },
+    
+    /// Function or procedure not found.
+    FunctionOrProcedureNotFound {
+        /// Name of the callable item
+        name: String,
+    },
+    
+    /// Wrong number of arguments in function call.
+    WrongArgumentCount {
+        /// Name of the function
+        name: String,
+        /// Expected number of arguments
+        expected: usize,
+        /// Actual number of arguments
+        got: usize,
+    },
 }
 
 impl Error for EvalError {}
@@ -229,8 +256,12 @@ impl fmt::Display for ControlFlowError {
             ControlFlowError::NonBooleanCondition => write!(formatter, "Condition must evaluate to a boolean value (non-zero for true, zero for false)."),
             ControlFlowError::BreakOutsideLoop => write!(formatter, "Break statement used outside a loop. 'break' can only be used within a 'while' loop."),
             ControlFlowError::ContinueOutsideLoop => write!(formatter, "Continue statement used outside a loop. 'continue' can only be used within a 'while' loop."),
-            ControlFlowError::ReturnOutsideFunction => write!(formatter, "Return statement used outside a function. 'return' can only be used within a function."),
+            ControlFlowError::ReturnOutsideFunction => write!(formatter, "Return statement used outside a function or procedure. 'return' can only be used within a function or procedure."),
+            ControlFlowError::InvalidReturnStatement(msg) => write!(formatter, "Invalid return statement usage: {}", msg),
             ControlFlowError::UnimplementedFeature(msg) => write!(formatter, "Unimplemented feature: {}", msg),
+            ControlFlowError::FunctionOrProcedureAlreadyDefined { name, kind } => write!(formatter, "{} '{}' already defined in the same scope.", kind, name),
+            ControlFlowError::FunctionOrProcedureNotFound { name } => write!(formatter, "No callable item named '{}' was found. Make sure the function or procedure is defined before calling it.", name),
+            ControlFlowError::WrongArgumentCount { name, expected, got } => write!(formatter, "Callable '{}' called with wrong number of arguments. Expected {}, got {}.", name, expected, got),
         }
     }
 }

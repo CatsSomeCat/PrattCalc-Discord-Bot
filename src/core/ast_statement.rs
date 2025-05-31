@@ -7,7 +7,7 @@ use crate::core::error_types::{ParseError, EvalError, SymbolError, ControlFlowEr
 use crate::core::execution_state::with_exit_state;
 
 /// Statement types in the language.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Statement {
     /// An expression used as a statement.
     Expression(Expression),
@@ -51,6 +51,26 @@ pub enum Statement {
         name: String,
         initializer: Expression,
     },
+
+    /// A function declaration with parameters and body.
+    Function {
+        name: String,
+        params: Vec<String>,
+        body: Box<Statement>,
+    },
+
+    /// A procedure declaration with parameters and body.
+    Procedure {
+        name: String,
+        params: Vec<String>,
+        body: Box<Statement>,
+    },
+
+    /// A call to a procedure.
+    ProcedureCall {
+        name: String,
+        args: Vec<Expression>,
+    },
 }
 
 // Add this enum to track control flow state between nested structures
@@ -60,6 +80,29 @@ pub enum ControlFlow {
     Break,
     Continue,
     Return,
+}
+
+/// Collects all variable names defined in a statement (let/const declarations)
+fn collect_declared_vars(stmt: &Statement, vars: &mut HashSet<String>) {
+    match stmt {
+        Statement::Let { name, .. } => { vars.insert(name.clone()); },
+        Statement::Const { name, .. } => { vars.insert(name.clone()); },
+        Statement::Block(statements) => {
+            for s in statements {
+                collect_declared_vars(s, vars);
+            }
+        },
+        Statement::If { then_branch, else_branch, .. } => {
+            collect_declared_vars(then_branch, vars);
+            if let Some(else_br) = else_branch {
+                collect_declared_vars(else_br, vars);
+            }
+        },
+        Statement::While { body, .. } => {
+            collect_declared_vars(body, vars);
+        },
+        _ => {}
+    }
 }
 
 impl Statement {
@@ -82,12 +125,27 @@ impl Statement {
                     "let" => Self::parse_let_statement(tokenizer)?,
                     "const" => Self::parse_const_statement(tokenizer)?,
                     "end" => Self::parse_end_statement(tokenizer)?,
+                    "fn" => Self::parse_function_statement(tokenizer)?,
+                    "proc" => Self::parse_procedure_statement(tokenizer)?,
                     _ => return Err(ParseError::UnexpectedToken(keyword)),
                 }
             }
             Token::Operator('{') => Self::parse_block_statement(tokenizer)?,
+            Token::Literal(lit) => {
+                // Check for procedure or function call
+                tokenizer.next_token(); // consume the literal
+                
+                if tokenizer.peek_token() == &Token::Operator('(') {
+                    // Parse a call (could be procedure or function, determined at evaluation time)
+                    Self::call_procedure(tokenizer, lit)?
+                } else {
+                    // Not a call, just an expression starting with a literal
+                    let expr = Expression::Literal(lit);
+                    Statement::Expression(expr)
+                }
+            },
             _ => {
-                // If not a keyword or block, treat as expression statement
+                // Try parsing as an expression first
                 let expression = Expression::parse(tokenizer, 0.0)?;
                 Statement::Expression(expression)
             }
@@ -264,6 +322,158 @@ impl Statement {
         Ok(Statement::Const { name, initializer })
     }
 
+    /// Parse a function declaration statement.
+    fn parse_function_statement(tokenizer: &mut Tokenizer) -> Result<Statement, ParseError> {
+        // Parse function name
+        let name = match tokenizer.next_token() {
+            Token::Literal(lit) => lit,
+            unexpected => return Err(ParseError::Expected {
+                expected: "function name".to_string(),
+                found: format!("{:?}", unexpected),
+            }),
+        };
+        
+        // Parse opening parenthesis for parameter list
+        match tokenizer.next_token() {
+            Token::Operator('(') => {},
+            unexpected => return Err(ParseError::Expected {
+                expected: "opening parenthesis '('".to_string(),
+                found: format!("{:?}", unexpected),
+            }),
+        }
+        
+        // Parse parameter list
+        let mut params = Vec::new();
+        
+        // Empty parameter list case
+        if tokenizer.peek_token() == &Token::Operator(')') {
+            tokenizer.next_token(); // consume closing paren
+        } else {
+            // Non-empty parameter list
+            loop {
+                match tokenizer.next_token() {
+                    Token::Literal(param) => params.push(param),
+                    unexpected => return Err(ParseError::Expected {
+                        expected: "parameter name".to_string(),
+                        found: format!("{:?}", unexpected),
+                    }),
+                }
+                
+                // Check for parameter delimiter or end of list
+                match tokenizer.next_token() {
+                    Token::Operator(',') => continue, // More parameters
+                    Token::Operator(')') => break,    // End of parameter list
+                    unexpected => return Err(ParseError::Expected {
+                        expected: "comma ',' or closing parenthesis ')'".to_string(),
+                        found: format!("{:?}", unexpected),
+                    }),
+                }
+            }
+        }
+        
+        // Parse function body (must be a block)
+        let body = match tokenizer.peek_token() {
+            Token::Operator('{') => Box::new(Self::parse_block_statement(tokenizer)?),
+            unexpected => return Err(ParseError::Expected {
+                expected: "function body block".to_string(),
+                found: format!("{:?}", *unexpected),
+            }),
+        };
+        
+        Ok(Statement::Function { name, params, body })
+    }
+    
+    /// Parse a procedure declaration statement.
+    fn parse_procedure_statement(tokenizer: &mut Tokenizer) -> Result<Statement, ParseError> {
+        // Parse procedure name
+        let name = match tokenizer.next_token() {
+            Token::Literal(lit) => lit,
+            unexpected => return Err(ParseError::Expected {
+                expected: "procedure name".to_string(),
+                found: format!("{:?}", unexpected),
+            }),
+        };
+        
+        // Parse opening parenthesis for parameter list
+        match tokenizer.next_token() {
+            Token::Operator('(') => {},
+            unexpected => return Err(ParseError::Expected {
+                expected: "opening parenthesis '('".to_string(),
+                found: format!("{:?}", unexpected),
+            }),
+        }
+        
+        // Parse parameter list
+        let mut params = Vec::new();
+        
+        // Empty parameter list case
+        if tokenizer.peek_token() == &Token::Operator(')') {
+            tokenizer.next_token(); // consume closing paren
+        } else {
+            // Non-empty parameter list
+            loop {
+                match tokenizer.next_token() {
+                    Token::Literal(param) => params.push(param),
+                    unexpected => return Err(ParseError::Expected {
+                        expected: "parameter name".to_string(),
+                        found: format!("{:?}", unexpected),
+                    }),
+                }
+                
+                // Check for parameter delimiter or end of list
+                match tokenizer.next_token() {
+                    Token::Operator(',') => continue, // More parameters
+                    Token::Operator(')') => break,    // End of parameter list
+                    unexpected => return Err(ParseError::Expected {
+                        expected: "comma ',' or closing parenthesis ')'".to_string(),
+                        found: format!("{:?}", unexpected),
+                    }),
+                }
+            }
+        }
+        
+        // Parse procedure body (must be a block)
+        let body = match tokenizer.peek_token() {
+            Token::Operator('{') => Box::new(Self::parse_block_statement(tokenizer)?),
+            unexpected => return Err(ParseError::Expected {
+                expected: "procedure body block".to_string(),
+                found: format!("{:?}", *unexpected),
+            }),
+        };
+        
+        Ok(Statement::Procedure { name, params, body })
+    }
+    
+    /// Helper method to parse a procedure call.
+    fn call_procedure(tokenizer: &mut Tokenizer, name: String) -> Result<Statement, ParseError> {
+        tokenizer.next_token(); // consume '('
+        
+        // Parse argument list
+        let mut args = Vec::new();
+        
+        // Empty argument list case
+        if tokenizer.peek_token() == &Token::Operator(')') {
+            tokenizer.next_token(); // consume closing paren
+        } else {
+            // Non-empty argument list
+            loop {
+                args.push(Expression::parse(tokenizer, 0.0)?);
+                
+                // Check for argument delimiter or end of list
+                match tokenizer.next_token() {
+                    Token::Operator(',') => continue, // More arguments
+                    Token::Operator(')') => break,    // End of argument list
+                    unexpected => return Err(ParseError::Expected {
+                        expected: "comma ',' or closing parenthesis ')'".to_string(),
+                        found: format!("{:?}", unexpected),
+                    }),
+                }
+            }
+        }
+        
+        Ok(Statement::ProcedureCall { name, args })
+    }
+
     /// Evaluate a statement in the given context.
     pub fn evaluate(&self, context: &mut SymbolTable<f32>) -> Result<(Option<f32>, ControlFlow), EvalError> {
         match self {
@@ -297,15 +507,13 @@ impl Statement {
                 // Keep track of variables defined in this block
                 let mut block_vars = HashSet::new();
 
+                // Pre-scan statements to find all variables defined in this block
+                for statement in statements {
+                    collect_declared_vars(statement, &mut block_vars);
+                }
+
                 // Evaluate each statement in the block with the new context
                 for statement in statements {
-                    // Track any new variables defined by let statements
-                    if let Statement::Let { name, .. } = statement {
-                        block_vars.insert(name.clone());
-                    } else if let Statement::Const { name, .. } = statement {
-                        block_vars.insert(name.clone());
-                    }
-                    
                     // Evaluate the current statement
                     let (value, stmt_flow) = statement.evaluate(&mut block_context)?;
                     
@@ -356,15 +564,7 @@ impl Statement {
 
                     // Track variables defined in this block to avoid shadowing issues
                     let mut defined_vars = HashSet::new();
-                    if let Statement::Block(statements) = &**then_branch {
-                        for stmt in statements {
-                            if let Statement::Let { name, .. } = stmt {
-                                defined_vars.insert(name.clone());
-                            } else if let Statement::Const { name, .. } = stmt {
-                                defined_vars.insert(name.clone());
-                            }
-                        }
-                    }
+                    collect_declared_vars(then_branch, &mut defined_vars);
 
                     // Copy variables from the then branch back to the parent context
                     for (key, value) in then_context.values.iter() {
@@ -397,15 +597,7 @@ impl Statement {
 
                     // Track variables defined in this block to avoid shadowing issues
                     let mut defined_vars = HashSet::new();
-                    if let Statement::Block(statements) = &**else_br {
-                        for stmt in statements {
-                            if let Statement::Let { name, .. } = stmt {
-                                defined_vars.insert(name.clone());
-                            } else if let Statement::Const { name, .. } = stmt {
-                                defined_vars.insert(name.clone());
-                            }
-                        }
-                    }
+                    collect_declared_vars(else_br, &mut defined_vars);
 
                     // Copy variables from the else branch back to the parent context
                     for (key, value) in else_context.values.iter() {
@@ -452,15 +644,7 @@ impl Statement {
 
                     // Track variables defined in this block to avoid shadowing issues
                     let mut defined_vars = HashSet::new();
-                    if let Statement::Block(statements) = &**body {
-                        for stmt in statements {
-                            if let Statement::Let { name, .. } = stmt {
-                                defined_vars.insert(name.clone());
-                            } else if let Statement::Const { name, .. } = stmt {
-                                defined_vars.insert(name.clone());
-                            }
-                        }
-                    }
+                    collect_declared_vars(body, &mut defined_vars);
 
                     // Copy variables from the loop iteration back to the parent context
                     for (key, value) in loop_context.values.iter() {
@@ -501,11 +685,20 @@ impl Statement {
             
             Statement::Continue => Ok((None, ControlFlow::Continue)),
             
-            Statement::Return(_expr) => {
-                // Return is no longer functional, but we keep the syntax
-                return Err(EvalError::ControlFlowError(
-                    ControlFlowError::UnimplementedFeature("The 'return' statement is no longer functional. Use 'end' instead.".to_string())
-                ));
+            Statement::Return(expr) => {
+                // Return is used for both functions and procedures
+                let value = if let Some(expr) = expr {
+                    Some(expr.evaluate(context)?)
+                } else {
+                    None
+                };
+                
+                // Check if we're inside a function or procedure
+                if !context.is_in_callable() {
+                    return Err(ControlFlowError::InvalidReturnStatement("Use 'end' instead of 'return' outside of functions/procedures".to_string()).into());
+                }
+                
+                Ok((value, ControlFlow::Return))
             }
 
             Statement::Let { name, initializer } => {
@@ -546,7 +739,82 @@ impl Statement {
                     state.value = value;
                 });
                 
+                // Return the value and a Return control flow to stop execution
                 Ok((value, ControlFlow::Return))
+            }
+
+            Statement::Function { name, params, body } => {
+                // Define function in the current scope
+                context.declare_function(name.clone(), params.clone(), *body.clone())?;
+                Ok((None, ControlFlow::Normal))
+            }
+
+            Statement::Procedure { name, params, body } => {
+                // Define procedure in the current scope
+                context.declare_procedure(name.clone(), params.clone(), *body.clone())?;
+                Ok((None, ControlFlow::Normal))
+            }
+
+            Statement::ProcedureCall { name, args } => {
+                // First check if this is a procedure
+                if let Some((params, body)) = context.get_procedure(name) {
+                    // Create a new scope for the procedure execution
+                    let mut proc_scope = context.new_scope();
+                    
+                    // Check argument count
+                    if args.len() != params.len() {
+                        return Err(ControlFlowError::WrongArgumentCount {
+                            name: name.clone(),
+                            expected: params.len(),
+                            got: args.len(),
+                        }.into());
+                    }
+                    
+                    // Evaluate arguments and bind to parameters
+                    for (i, arg) in args.iter().enumerate() {
+                        let arg_value = arg.evaluate(context)?;
+                        proc_scope.set_variable(params[i].clone(), arg_value)?;
+                    }
+                    
+                    // Execute the procedure body and ignore any return value
+                    match body.evaluate(&mut proc_scope)? {
+                        (_, ControlFlow::Return) => Ok((None, ControlFlow::Normal)),
+                        (_, ControlFlow::Normal) => Ok((None, ControlFlow::Normal)),
+                        (_, control_flow) => Ok((None, control_flow)), // Pass along other control flow
+                    }
+                } 
+                // Then check if it's a function
+                else if let Some((params, body)) = context.get_function(name) {
+                    // Create a new scope for the function execution
+                    let mut func_scope = context.new_scope();
+                    
+                    // Check argument count
+                    if args.len() != params.len() {
+                        return Err(ControlFlowError::WrongArgumentCount {
+                            name: name.clone(),
+                            expected: params.len(),
+                            got: args.len(),
+                        }.into());
+                    }
+                    
+                    // Evaluate arguments and bind to parameters
+                    for (i, arg) in args.iter().enumerate() {
+                        let arg_value = arg.evaluate(context)?;
+                        func_scope.set_variable(params[i].clone(), arg_value)?;
+                    }
+                    
+                    // Execute the function body and convert to expression
+                    match body.evaluate(&mut func_scope)? {
+                        (Some(value), _) => Ok((Some(value), ControlFlow::Normal)),
+                        (None, _) => Ok((Some(0.0), ControlFlow::Normal)), // Default return value
+                    }
+                }
+                else {
+                    // Neither a procedure nor a function
+                    Err(ControlFlowError::FunctionOrProcedureNotFound {
+                        name: name.clone(),
+                    }.into())
+                }
             }
         }
     }

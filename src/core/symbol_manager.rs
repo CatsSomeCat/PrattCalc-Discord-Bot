@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use lazy_static::lazy_static;
-use crate::core::error_types::{EvalError, SymbolError};
+use crate::core::error_types::{EvalError, SymbolError, ControlFlowError};
+use crate::core::ast_statement::Statement;
 
 /// Stores global constants that are always available to expressions.
 ///
@@ -80,6 +81,12 @@ pub struct SymbolTable<T: Clone + PartialEq> {
     
     /// Names of symbols that are constants and cannot be modified.
     pub constants: HashSet<String>,
+
+    /// Functions defined in this scope.
+    pub functions: HashMap<String, (Vec<String>, Statement)>,
+    
+    /// Procedures defined in this scope.
+    pub procedures: HashMap<String, (Vec<String>, Statement)>,
 }
 
 impl<T: Clone + PartialEq> SymbolTable<T> {
@@ -88,6 +95,8 @@ impl<T: Clone + PartialEq> SymbolTable<T> {
         Self {
             values: HashMap::new(),
             constants: HashSet::new(),
+            functions: HashMap::new(),
+            procedures: HashMap::new(),
         }
     }
     
@@ -151,6 +160,40 @@ impl<T: Clone + PartialEq> SymbolTable<T> {
         Ok(())
     }
     
+    /// Declares a new function with the given name, parameters, and body.
+    pub fn declare_function(&mut self, name: String, params: Vec<String>, body: Statement) -> Result<(), EvalError> {
+        if self.functions.contains_key(&name) {
+            return Err(ControlFlowError::FunctionOrProcedureAlreadyDefined {
+                name,
+                kind: "Function".to_string(),
+            }.into());
+        }
+        self.functions.insert(name, (params, body));
+        Ok(())
+    }
+    
+    /// Declares a new procedure with the given name, parameters, and body.
+    pub fn declare_procedure(&mut self, name: String, params: Vec<String>, body: Statement) -> Result<(), EvalError> {
+        if self.procedures.contains_key(&name) {
+            return Err(ControlFlowError::FunctionOrProcedureAlreadyDefined {
+                name,
+                kind: "Procedure".to_string(),
+            }.into());
+        }
+        self.procedures.insert(name, (params, body));
+        Ok(())
+    }
+    
+    /// Gets a function by name.
+    pub fn get_function(&self, name: &str) -> Option<(Vec<String>, Statement)> {
+        self.functions.get(name).cloned()
+    }
+    
+    /// Gets a procedure by name.
+    pub fn get_procedure(&self, name: &str) -> Option<(Vec<String>, Statement)> {
+        self.procedures.get(name).cloned()
+    }
+    
     /// Creates a new symbol table with the same constants but independent variables.
     ///
     /// Used for creating nested scopes in blocks like if/while statements.
@@ -158,6 +201,8 @@ impl<T: Clone + PartialEq> SymbolTable<T> {
         Self {
             values: self.values.clone(),
             constants: self.constants.clone(),
+            functions: self.functions.clone(),
+            procedures: self.procedures.clone(),
         }
     }
     
@@ -199,6 +244,13 @@ impl<T: Clone + PartialEq> SymbolTable<T> {
     /// Returns true if the symbol table is empty.
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
+    }
+
+    /// Returns true if we're inside a function or procedure context.
+    pub fn is_in_callable(&self) -> bool {
+        // This is a simple placeholder implementation
+        // In a real implementation, you would track the current execution context
+        false
     }
 }
 

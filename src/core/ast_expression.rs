@@ -1,8 +1,8 @@
 use std::fmt;
 use crate::core::lexical_analyzer::{Token, Tokenizer};
-use crate::core::error_types::{ParseError, EvalError, MathError, SymbolError};
+use crate::core::error_types::{ParseError, EvalError, MathError, SymbolError, ControlFlowError};
 use crate::core::symbol_manager::{SymbolTable, global_constants};
-use crate::core::ast_statement::Statement;
+use crate::core::ast_statement::{Statement, ControlFlow};
 use rand::Rng;
 
 /// AST node for expressions.
@@ -11,7 +11,7 @@ use rand::Rng;
 ///
 /// The Expression enum can be a literal value, an operation with operands,
 /// or a function call with arguments.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Expression {
     /// A literal string: numeric or variable identifier.
     Literal(String),
@@ -52,7 +52,7 @@ impl fmt::Display for Expression {
 }
 
 impl Expression {
-    /// Parse an expression from a tokenizer with minimum binding power.
+    /// Parses an expression from a tokenizer with aminimum binding power.
     ///
     /// This is the core of the Pratt parsing algorithm.
     ///
@@ -69,7 +69,7 @@ impl Expression {
                 }
             },
 
-            // Grouped expression - parse expressions inside parentheses
+            // Grouped expression; parse expressions inside parentheses
             Token::Operator('(') => {
                 tokenizer.next_token(); // consume '('
                 let expr = Self::parse(tokenizer, 0.0)?;
@@ -100,26 +100,33 @@ impl Expression {
                 Expression::Operation(prefix_op, operands)
             }
 
-            // Literal or potential function call (e.g., "fn:sin")
+            // Literal token
             Token::Literal(_) => {
                 if let Token::Literal(lit) = tokenizer.next_token() {
-                    if lit.starts_with("fn:") {
-                        let function_name = lit.trim_start_matches("fn:").to_string();
-                        
+                    // Check for function call (literal followed by open parenthesis)
+                    if tokenizer.peek_token() == &Token::Operator('(') {
                         tokenizer.next_token(); // consume '('
                         let mut args = Vec::new();
 
-                        while tokenizer.peek_token() != &Token::Operator(')') {
-                            args.push(Self::parse(tokenizer, 0.0)?);
-                            if tokenizer.peek_token() == &Token::Operator(',') {
-                                tokenizer.next_token(); // consume ','
-                            } else {
-                                break;
+                        // Parse argument list
+                        if tokenizer.peek_token() != &Token::Operator(')') {
+                            loop {
+                                args.push(Self::parse(tokenizer, 0.0)?);
+                                if tokenizer.peek_token() == &Token::Operator(',') {
+                                    tokenizer.next_token(); // consume ','
+                                } else {
+                                    break;
+                                }
                             }
                         }
                         
+                        // Ensure closing parenthesis
+                        if tokenizer.peek_token() != &Token::Operator(')') {
+                            return Err(ParseError::UnmatchedParenthesis);
+                        }
                         tokenizer.next_token(); // consume ')'
-                        Expression::FunctionCall(function_name, args)
+                        
+                        Expression::FunctionCall(lit, args)
                     } else {
                         Expression::Literal(lit)
                     }
@@ -186,9 +193,7 @@ impl Expression {
         Ok(lhs)
     }
 
-    /// Identify if this is an assignment operation.
-    /// 
-    /// Returns `(variable_name, rhs_expression)` if so.
+    /// Identifies if this is an assignment operation.
     #[allow(dead_code)]
     pub fn is_assignment(&self) -> Option<(String, Expression)> {
         if let Expression::Operation(op_char, operands) = self {
@@ -207,6 +212,7 @@ impl Expression {
     /// Evaluate the AST node against a context of variable bindings.
     ///
     /// Recursively evaluates the expression using the provided SymbolTable for variable lookups.
+    /// 
     /// For variable names, it first checks the local context (SymbolTable), then global constants.
     pub fn evaluate(&self, context: &SymbolTable<f32>) -> Result<f32, EvalError> {
         match self {
@@ -342,13 +348,21 @@ impl Expression {
 
             // Function call
             Expression::FunctionCall(name, args) => {
+                // First, check if it's a procedure call
+                if context.procedures.contains_key(name) {
+                    // Return error - procedure calls must be handled as statements
+                    return Err(ControlFlowError::UnimplementedFeature(
+                        format!("Procedure '{}' cannot be called as a function expression", name)
+                    ).into());
+                }
+                
                 // Evaluate all arguments first
                 let mut evaluated_args = Vec::with_capacity(args.len());
                 for arg in args {
                     evaluated_args.push(arg.evaluate(context)?);
                 }
-
-                // Dispatch built-in functions
+                
+                // Check for built-in functions first
                 match name.as_str() {
                     "sin"   => Ok(evaluated_args[0].sin()),
                     "cos"   => Ok(evaluated_args[0].cos()),
@@ -413,10 +427,41 @@ impl Expression {
                             }
                             Ok(rng.gen_range(min..max))
                         } else {
-                            Err(MathError::UnsupportedFunction("rand takes at most 2 arguments".to_string()).into())
+                            Err(MathError::UnsupportedFunction("rand() accepts 0, 1, or 2 arguments".to_string()).into())
                         }
                     },
-                    unknown => Err(MathError::UnsupportedFunction(unknown.to_string()).into()),
+                    // If not a built-in function, check for user-defined functions
+                    _ => {
+                        if let Some((params, body)) = context.get_function(name) {
+                            // Create a new scope for function execution
+                            let mut function_scope = context.new_scope();
+                            
+                            // Check argument count matches parameter count
+                            if evaluated_args.len() != params.len() {
+                                return Err(ControlFlowError::WrongArgumentCount {
+                                    name: name.clone(),
+                                    expected: params.len(),
+                                    got: evaluated_args.len(),
+                                }.into());
+                            }
+                            
+                            // Bind evaluated arguments to parameters
+                            for (i, &arg_value) in evaluated_args.iter().enumerate() {
+                                function_scope.set_variable(params[i].clone(), arg_value)?;
+                            }
+                            
+                            // Execute the function body
+                            match body.evaluate(&mut function_scope)? {
+                                (Some(value), ControlFlow::Return) => Ok(value),
+                                (Some(value), _) => Ok(value),  // Return the last value if no explicit return
+                                (None, _) => Ok(0.0),  // Default return value if none specified
+                            }
+                        } else {
+                            Err(ControlFlowError::FunctionOrProcedureNotFound {
+                                name: name.clone(),
+                            }.into())
+                        }
+                    }
                 }
             }
         }
@@ -426,6 +471,7 @@ impl Expression {
 /// Defines precedence and associativity.
 ///
 /// Returns a tuple of (left_binding_power, right_binding_power, is_left_associative).
+/// 
 /// Higher binding power means higher precedence.
 pub fn infix_binding_power(op: char) -> Option<(f32, f32, bool)> {
     // For left associative operators, left_bp < right_bp

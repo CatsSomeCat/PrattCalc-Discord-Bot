@@ -1,0 +1,78 @@
+// Scopes and Blocks Example
+
+// Global scope variables
+let global_x = 100;
+let global_y = 200;
+
+// Basic block with local scope
+{
+    // This creates a new variable x in the local scope
+    let x = 10;
+    let y = 20;
+    
+    // We can access global variables
+    let sum = x + y + global_x;  // 10 + 20 + 100 = 130
+    sum;  // 130
+}
+
+// x and y from the block above are not accessible here
+global_x;  // 100
+global_y;  // 200
+
+// Variable shadowing
+let shadow = 5;
+{
+    // This shadows the outer shadow variable
+    let shadow = 10;
+    shadow;  // 10
+    
+    // We can shadow again in nested blocks
+    {
+        let shadow = 15;
+        shadow;  // 15
+    }
+    
+    // Back to the first shadowed value
+    shadow;  // 10
+}
+
+// Back to the original value
+shadow;  // 5
+
+// Modifying outer variables from inner scopes
+let outer = 50;
+{
+    // We can modify variables from outer scopes
+    outer = outer * 2;  // 50 * 2 = 100
+}
+outer;  // 100
+
+// Blocks with conditionals
+let condition = 1;
+if condition {
+    let temp = 42;
+    temp;  // 42
+}
+// temp is not accessible here
+
+// Blocks with loops
+let i = 0;
+let loop_sum = 0;
+while i < 5 {
+    let temp = i * 2;
+    loop_sum = loop_sum + temp;
+    i = i + 1;
+}
+loop_sum;  // (0*2) + (1*2) + (2*2) + (3*2) + (4*2) = 0 + 2 + 4 + 6 + 8 = 20
+
+// Constants in different scopes
+const OUTER_CONST = 100;
+{
+    const INNER_CONST = 200;
+    OUTER_CONST + INNER_CONST;  // 300
+}
+// INNER_CONST is not accessible here
+OUTER_CONST;  // 100
+
+// Final result
+end outer + shadow;  // 100 + 5 = 105 

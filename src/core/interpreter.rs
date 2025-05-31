@@ -47,7 +47,7 @@ pub fn execute(input: &str, context: &mut SymbolTable<f32>) -> Result<Option<f32
             let mut last_value: Option<f32> = None;
             let mut result = Ok(None);
             
-            for statement in statements {
+            for (_i, statement) in statements.iter().enumerate() {
                 // Check if an exit statement has been processed
                 if with_exit_state(|state| state.occurred) {
                     break;
@@ -69,6 +69,10 @@ pub fn execute(input: &str, context: &mut SymbolTable<f32>) -> Result<Option<f32
                                 result = Err(ExecutionError::EvaluationError(
                                     ControlFlowError::ContinueOutsideLoop.into()
                                 ));
+                                break;
+                            },
+                            ControlFlow::Return => {
+                                // Stop execution on return (used by end statement at global scope)
                                 break;
                             },
                             _ => {}

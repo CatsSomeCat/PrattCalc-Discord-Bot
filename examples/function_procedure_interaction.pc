@@ -1,0 +1,149 @@
+// Function and Procedure Interaction Examples
+
+// Global state that will be shared between functions and procedures
+let total = 0;
+let count = 0;
+let min_value = 999999;
+let max_value = -999999;
+
+// Function to calculate the square of a number
+fn square(x) {
+    x * x
+}
+
+// Function to calculate the cube of a number
+fn cube(x) {
+    x * x * x
+}
+
+// Procedure that updates global stats using function results
+proc process_value(x) {
+    // Increment the count
+    count = count + 1;
+    
+    // Add the square of x to the total
+    total = total + square(x);
+    
+    // Update min/max
+    if x < min_value {
+        min_value = x;
+    }
+    
+    if x > max_value {
+        max_value = x;
+    }
+}
+
+// Function that uses the global state updated by procedures
+fn get_average() {
+    if count == 0 {
+        return 0;
+    }
+    
+    total / count
+}
+
+// Function that combines multiple calculations
+fn calculate_metric(x) {
+    let squared = square(x);
+    let cubed = cube(x);
+    
+    // We'll use a procedure to track this calculation
+    track_calculation(x, squared, cubed);
+    
+    // Return the result
+    squared + cubed
+}
+
+// Procedure to track calculations for auditing
+let calculations_performed = 0;
+let last_input = 0;
+let last_result = 0;
+
+proc track_calculation(input, intermediate1, intermediate2) {
+    calculations_performed = calculations_performed + 1;
+    last_input = input;
+    last_result = intermediate1 + intermediate2;
+}
+
+// Function that uses a procedure for validation
+fn safe_divide(a, b) {
+    // Use a procedure to validate inputs
+    let is_valid = validate_division(a, b);
+    
+    if is_valid == 0 {
+        return 0;  // Return 0 if invalid
+    }
+    
+    a / b
+}
+
+// Procedure for input validation
+let error_count = 0;
+
+proc validate_division(a, b) {
+    if b == 0 {
+        error_count = error_count + 1;
+        return 0;  // Invalid
+    }
+    
+    return 1;  // Valid
+}
+
+// Procedure that calls multiple functions and aggregates results
+proc analyze_data(values_count) {
+    // Generate and process some values
+    let i = 1;
+    while i <= values_count {
+        let value = i * 10;
+        
+        // Process this value
+        process_value(value);
+        
+        // Calculate a metric
+        let metric = calculate_metric(value);
+        
+        i = i + 1;
+    }
+}
+
+// Use the functions and procedures together
+analyze_data(5);  // Process 5 values: 10, 20, 30, 40, 50
+
+// Show the results
+count;                  // Should be 5
+min_value;              // Should be 10
+max_value;              // Should be 50
+get_average();          // Should be (100+400+900+1600+2500)/5 = 5500/5 = 1100
+calculations_performed; // Should be 5
+last_input;             // Should be 50
+last_result;            // Should be 2500 + 125000 = 127500
+
+// A real-world example: calculating statistics on a dataset
+proc calculate_statistics(data_points) {
+    // Reset stats
+    total = 0;
+    count = 0;
+    min_value = 999999;
+    max_value = -999999;
+    
+    // Process each data point
+    let i = 1;
+    while i <= data_points {
+        let value = i * i;  // Just an example value
+        process_value(value);
+        i = i + 1;
+    }
+    
+    // Print stats
+    min_value;             // Minimum value
+    max_value;             // Maximum value
+    get_average();         // Average value
+    max_value - min_value; // Range
+}
+
+// Calculate statistics for 10 data points
+calculate_statistics(10);
+
+// Final result: show the average of our dataset
+end get_average();  // Should be (1+4+9+16+25+36+49+64+81+100)/10 = 385/10 = 38.5 

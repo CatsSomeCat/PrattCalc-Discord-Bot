@@ -1,0 +1,108 @@
+// Functions and Procedures Example
+
+// Basic function that returns a value
+fn add(a, b) {
+    a + b  // Returns the sum (last expression is the return value)
+}
+
+// Function with explicit return
+fn subtract(a, b) {
+    return a - b;
+}
+
+// Function with conditional logic
+fn max(a, b) {
+    if a > b {
+        return a;
+    }
+    b  // If a is not greater than b, return b
+}
+
+// Recursive function for factorial
+fn factorial(n) {
+    if n <= 1 {
+        return 1;
+    }
+    n * factorial(n - 1)
+}
+
+// Function that uses other functions
+fn hypotenuse(a, b) {
+    sqrt(a * a + b * b)
+}
+
+// Function with multiple return paths
+fn classify(x) {
+    if x < 0 {
+        return -1;  // Negative
+    } else if x == 0 {
+        return 0;   // Zero
+    }
+    1  // Positive
+}
+
+// Basic procedure (doesn't return a value)
+proc print_values(a, b) {
+    // In a real implementation, this would print the values
+    // But for our calculator, it just calculates
+    let sum = a + b;
+    let product = a * b;
+}
+
+// Procedure that modifies global variables
+let global_sum = 0;
+let global_product = 1;
+
+proc process_numbers(a, b, c) {
+    global_sum = a + b + c;
+    global_product = a * b * c;
+}
+
+// Calling functions
+let result1 = add(5, 3);           // 8
+let result2 = subtract(10, 4);     // 6
+let result3 = max(7, 12);          // 12
+let result4 = factorial(5);        // 120
+let result5 = hypotenuse(3, 4);    // 5
+let result6 = classify(-10);       // -1
+
+// Calling procedures
+print_values(5, 10);  // Doesn't return anything
+
+// Use process_numbers to modify globals
+process_numbers(2, 3, 4);
+global_sum;       // 2 + 3 + 4 = 9
+global_product;   // 2 * 3 * 4 = 24
+
+// Nested function definitions
+fn outer_function(x) {
+    // Define a local function
+    fn double(y) {
+        y * 2
+    }
+    
+    // Use the local function
+    double(x) + x
+}
+
+let result7 = outer_function(5);  // (5*2) + 5 = 15
+
+// Function with early return
+fn early_return(x) {
+    if x < 0 {
+        return 0;
+    }
+    
+    if x > 100 {
+        return 100;
+    }
+    
+    x  // Return original value if between 0 and 100
+}
+
+let result8 = early_return(-5);    // 0
+let result9 = early_return(50);    // 50
+let result10 = early_return(200);  // 100
+
+// Show all results
+end result1 + result2 + result3 + result4 + result5; 

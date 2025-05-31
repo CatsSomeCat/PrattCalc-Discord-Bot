@@ -1,0 +1,34 @@
+// Variables and Constants Example
+
+// Variable declaration and assignment
+let x = 10;
+let y = 20;
+let z = x + y;  // z = 30
+
+// Variable reassignment
+x = x + 5;      // x = 15
+y = y * 2;      // y = 40
+z = x + y;      // z = 55
+
+// Constants (immutable)
+const PI_SQUARED = 9.8696;
+const GRAVITY = 9.81;
+const SPEED_OF_LIGHT = 299792458;
+
+// Using built-in mathematical constants
+let circle_radius = 5;
+let circle_area = PI * circle_radius * circle_radius;
+let exp_value = E * 2;
+let golden_ratio = PHI;
+
+// Print some results
+circle_area;    // Should be around 78.54
+exp_value;      // Should be around 5.44
+golden_ratio;   // Should be around 1.618
+
+// Multiple variable declarations
+let a = 1, b = 2, c = 3;
+a + b + c;      // Should be 6
+
+// Final result
+end z;  // Terminates with value 55 

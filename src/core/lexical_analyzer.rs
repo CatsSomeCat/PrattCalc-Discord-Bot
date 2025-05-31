@@ -51,7 +51,9 @@ impl Tokenizer {
             position: 0,
         };
         
-        tokenizer.tokenize(input); tokenizer
+        tokenizer.tokenize(input);
+        
+        tokenizer
     }
     
     /// Tokenizes the input string into a sequence of tokens.
@@ -60,9 +62,10 @@ impl Tokenizer {
         let mut chars_iter = input.chars().peekable();
 
         // Keywords that the tokenizer should recognize
-        const KEYWORDS: [&str; 11] = [
+        const KEYWORDS: [&str; 13] = [
             "if", "else", "while", "break", "continue", 
-            "return", "let", "const", "true", "false", "end"
+            "return", "let", "const", "true", "false", "end",
+            "fn", "proc"
         ];
 
         while let Some(&current_char) = chars_iter.peek() {
@@ -119,10 +122,10 @@ impl Tokenizer {
                             _ => token_list.push(Token::Keyword(text)),
                         }
                     }
-                    // Check if it's a function call
+                    // Check if it's a function or procedure call (function or procedure name followed by an opening parenthesis)
                     else if let Some(&paren_char) = chars_iter.peek() {
                         if paren_char == '(' {
-                            token_list.push(Token::Literal(format!("fn:{}", text)));
+                            token_list.push(Token::Literal(text));
                         } else {
                             token_list.push(Token::Literal(text));
                         }
