@@ -200,6 +200,7 @@ fn create_command_help_embed(metadata: &crate::discord::models::CommandMetadata)
 /// Initialize and configure pre-cached help embeds for different topics.
 /// 
 /// Creates a collection of embeds for each help topic to avoid rebuilding them on every request.
+///
 /// This improves response time and reduces code duplication.
 pub fn initialize_help_embeds(command_metadata: Option<&HashMap<String, crate::discord::models::CommandMetadata>>) -> HashMap<String, CreateEmbed> {
     info!("Initializing help embeds cache");
@@ -293,17 +294,17 @@ fn create_overview_help(command_metadata: &HashMap<String, crate::discord::model
     
     CreateEmbed::new()
         .title("Calculator Help")
-        .description("This calculator bot allows you to evaluate mathematical expressions, store variables, and use control flow structures.")
+        .description("This calculator bot allows you to evaluate mathematical expressions, store variables, use control flow structures, and define custom functions and procedures.")
         .field("Available Commands", commands_list, false)
         .field("Help Topics", 
                "`basics` - Basic usage and expressions\n\
                 `syntax` - Expression syntax and operators\n\
                 `variables` - Working with variables\n\
                 `control` - Control flow structures\n\
-                `functions` - Available functions", 
+                `functions & procedures` - Built-in and user-defined functions/procedures", 
                 false)
         .field("Examples", 
-               "```rust\n2 + 2 * 3;\n(10 - 5) / 2;\nlet x = 5;\n```", 
+               "```rust\n2 + 2 * 3;\n(10 - 5) / 2;\nlet x = 5;\n\n// Define a function\nfn square(x) {\n    return x * x\n}\n```", 
                 false)
         .colour(Colour::BLUE)
 }
@@ -411,7 +412,7 @@ fn create_control_flow_help() -> CreateEmbed {
 fn create_functions_help() -> CreateEmbed {
     CreateEmbed::new()
         .title("Calculator Functions")
-        .description("Built-in functions for common mathematical operations.")
+        .description("The calculator supports built-in mathematical functions and user-defined functions & procedures.")
         .field("Basic Trigonometric", 
                "```rust\nsin(x) - Sine of x (radians)\ncos(x) - Cosine of x (radians)\ntan(x) - Tangent of x (radians)\n```", 
                false)
@@ -432,6 +433,15 @@ fn create_functions_help() -> CreateEmbed {
                false)
         .field("Function Usage", 
                "```rust\nsin(PI / 2);\natan2(1, -1);\nsqrt(25) + abs(-10);\n```", 
+               false)
+        .field("User-Defined Functions",
+               "Define your own reusable functions that return values:\n```rust\nfn square(x) {\n    return x * x\n}\n\nfn hypotenuse(a, b) {\n    return sqrt(a * a + b * b)\n}\n\n// Use your functions\nlet area = square(5);  // 25\nlet c = hypotenuse(3, 4);  // 5\n```",
+               false)
+        .field("User-Defined Procedures",
+               "Define procedures that perform operations without returning values:\n```rust\nlet total = 0;\n\nproc add_values(a, b) {\n    total = total + a + b;\n}\n\n// Use your procedure\nadd_values(5, 10);  // total is now 15\n```",
+               false)
+        .field("The End Keyword",
+               "Terminate program execution and return a value:\n```rust\nlet x = calculate_value();\nif x > threshold {\n    end x;  // Exits with value x\n}\n// Code continues if x <= threshold\n```",
                false)
         .colour(Colour::from_rgb(138, 43, 226))
 } 
