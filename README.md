@@ -180,6 +180,7 @@ let random_range = rand(10, 20); // 10.0 to 20.0
 // If-else statements
 let x = 10;
 let result = 0;
+
 if x > 5 {
     result = 1;
 } else {
@@ -200,11 +201,14 @@ if x > 0 {
 // While loops
 let sum = 0;
 let i = 1;
+
 while i <= 10 {
     sum = sum + i;
     i = i + 1;
 }
+
 // sum is now 55
+end sum;
 ```
 
 ### Block Scopes and Shadowing
@@ -255,7 +259,8 @@ fn abs(x) {
     if x < 0 {
         return -x;
     }
-    x
+
+    return x
 }
 
 // Recursive factorial function
@@ -263,12 +268,13 @@ fn factorial(n) {
     if n <= 1 {
         return 1;
     }
-    n * factorial(n - 1)
+
+    return n * factorial(n - 1)
 }
 
 // Function that uses other functions
 fn hypotenuse(a, b) {
-    sqrt(a * a + b * b)
+    return sqrt(a * a + b * b)
 }
 
 // Use the function
@@ -280,8 +286,7 @@ let rectangle_area = area(5, 10);  // Returns 50
 ```rust
 // Define a procedure to initialize values
 proc init_values(a, b) {
-    let sum = a + b;
-    let product = a * b;
+    let sum = a + b; let product = a * b;
 }
 
 // Define a procedure that modifies outer variables
@@ -303,7 +308,7 @@ let count = 0;
 
 // A function that performs a calculation
 fn square(x) {
-    x * x
+    return x * x
 }
 
 // A procedure that uses function results
@@ -318,7 +323,8 @@ fn get_average() {
     if count == 0 {
         return 0;
     }
-    sum / count
+
+    return sum / count
 }
 
 // Use them together
