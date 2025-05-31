@@ -18,6 +18,17 @@ The bot utilizes Pratt Parsing (top-down operator precedence parsing) for effici
 - **Comment Support**: Both line (`//`) and block (`/* */`) comments
 - **Functions & Procedures**: Define reusable code with `fn` and `proc` keywords
 
+### Discord Slash Commands
+
+PrattCalc implements the following slash commands:
+
+- `/evaluate <expression>` - Calculate the result of a mathematical expression
+- `/execute <code>` - Run multiline code blocks with complex logic
+- `/help <topic>` - Get help on a specific topic or general usage information
+- `/vars` - List all currently defined variables in your session
+- `/clear` - Clear all variables and history in your current session
+- `/statistics` - Display bot statistics and system information
+
 Additionally, you can right-click on any message containing code and select "Apps > Execute Code" to run the code in the message.
 
 ## Technical Implementation
